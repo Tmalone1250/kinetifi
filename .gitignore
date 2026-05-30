@@ -5,3 +5,4 @@ __pycache__/
 docs/
 .ai_rules
 telemetry/
+tests/
