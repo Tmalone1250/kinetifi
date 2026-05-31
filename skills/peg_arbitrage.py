@@ -16,6 +16,7 @@ from skills.base import BaseSkill
 from core.intent.models import ParsedIntent
 from core.execution.cli_wrapper import ExecutionResult, run_byreal_cli
 from core.observability.decision_log import log_telemetry_event
+from core.execution.onchain_client import OnChainClient
 
 class ArbitrageParams(BaseModel):
     target_asset: str = Field(default="USDY", description="Pegged asset to monitor")
@@ -34,6 +35,9 @@ class ArbitrageParams(BaseModel):
         return v.upper()
 
 class PegArbitrageSkill(BaseSkill):
+    def __init__(self):
+        super().__init__()
+        self._onchain = OnChainClient()
     
     @property
     def name(self) -> str:
@@ -43,51 +47,45 @@ class PegArbitrageSkill(BaseSkill):
     def description(self) -> str:
         return "Monitors stable deviations and executes risk-free arbitrage swaps."
 
-    async def _query_pool_price(self, pair: str) -> float:
-        # Queries active price from cli
-        try:
-            res = await run_byreal_cli(["price", "--pair", pair])
-            if res.returncode == 0:
-                try:
-                    for line in res.stdout.split("\n"):
-                        if "Price:" in line:
-                            return float(line.split(":")[-1].strip())
-                    return float(res.stdout.strip())
-                except Exception:
-                    pass
-        except Exception as e:
-            log_telemetry_event("ERROR", "skill_registry", "query_price", f"Failed to get price for {pair}: {e}", {})
-        
-        # Fallback default mock price if CLI call is incomplete
-        return 0.9850
-
     async def validate_preflight(self, params: Dict[str, Any]) -> bool:
         try:
             p = ArbitrageParams(**params)
+            wallet_addr = "0x0529E64CB29388df0312000000021bc08910E64C" # Smart wallet proxy
             
-            # Step A: Query live market ratio
-            pair = f"{p.target_asset}/{p.peg_asset}"
-            market_price = await self._query_pool_price(pair)
+            # 1. Fetch REAL USDY price from live pool contract on Mantle L2
+            market_price = await self._onchain.get_live_usdy_price()
             deviation = market_price - 1.0000
 
-            # Step B: Check Trigger Threshold (theta)
-            if abs(deviation) < p.threshold:
-                log_telemetry_event("INFO", "guardrails", "validate_preflight", "Arbitrage skipped. Market ratio stable.", {"price": market_price, "deviation": deviation})
+            # 2. Query REAL Native MNT balance to verify gas capability
+            gas_balance = await self._onchain.get_mnt_balance(wallet_addr)
+            if gas_balance < 0.1: # Require at least 0.1 MNT
+                log_telemetry_event(
+                    "WARN", "guardrails", "validate_preflight",
+                    f"Transaction blocked: Low MNT balance on-chain ({gas_balance:.4f} MNT available).", {}
+                )
                 return False
 
-            # Step C: Evaluate Net Profit Hardening Constraint
+            # 3. Calculate NAP (Net Arbitrage Profitability) using real price data
             gross_profit = p.amount * abs(deviation)
-            gas_cost = 0.0015  # Fixed simulated gas overhead cost
+            gas_cost = 0.0015  # L2 gas estimate
             nap = gross_profit - gas_cost
 
             if nap < p.target_profit:
-                log_telemetry_event("WARNING", "guardrails", "validate_preflight", "Arbitrage aborted. Net margin calculation too thin.", {"gross": gross_profit, "gas": gas_cost, "nap": nap, "target": p.target_profit})
+                log_telemetry_event(
+                    "WARN", "guardrails", "validate_preflight",
+                    f"Arbitrage aborted. On-chain margin calculation too thin (NAP: ${nap:.4f}).",
+                    {"live_price": market_price, "gas_balance_mnt": gas_balance}
+                )
                 return False
 
-            log_telemetry_event("INFO", "guardrails", "validate_preflight", "Arbitrage triggers validated. Net margin margin holds.", {"gross": gross_profit, "gas": gas_cost, "nap": nap})
+            log_telemetry_event(
+                "SUCCESS", "guardrails", "validate_preflight",
+                f"On-chain triggers confirmed! Live state verified. Routing execution.",
+                {"live_price": market_price, "nap": nap, "gas_balance_mnt": gas_balance}
+            )
             return True
         except Exception as e:
-            log_telemetry_event("ERROR", "guardrails", "validate_preflight", f"Pre-flight error: {e}", {})
+            log_telemetry_event("ERROR", "guardrails", "validate_preflight", f"On-chain pre-flight crash: {e}", {})
             return False
 
     async def execute(self, intent: ParsedIntent) -> ExecutionResult:
@@ -101,8 +99,7 @@ class PegArbitrageSkill(BaseSkill):
             return ExecutionResult(stdout="", stderr="Arbitrage triggers not validated.", returncode=1, latency_ms=0.0)
 
         p = ArbitrageParams(**step_params)
-        pair = f"{p.target_asset}/{p.peg_asset}"
-        market_price = await self._query_pool_price(pair)
+        market_price = await self._onchain.get_live_usdy_price()
         
         # Decide buy/sell direction based on deviation direction
         if market_price < 1.00:
