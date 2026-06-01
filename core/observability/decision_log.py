@@ -48,3 +48,20 @@ def log_telemetry_event(level: str, component: str, action: str, description: st
             f.write(json.dumps(event) + "\n")
     except Exception as e:
         logger.error(f"FATAL: Could not write to telemetry stream {EVENT_STREAM_PATH}: {e}")
+
+class TelemetryLogger:
+    """Object-oriented wrapper around log_telemetry_event for dependency injection."""
+    def __init__(self, filepath: str = None):
+        self.filepath = filepath # Defaults to the global EVENT_STREAM_PATH in log_telemetry_event
+        
+    def log_info(self, component: str, action: str, description: str, metadata: Dict[str, Any] = None):
+        log_telemetry_event("INFO", component, action, description, metadata or {})
+        
+    def log_warn(self, component: str, action: str, description: str, metadata: Dict[str, Any] = None):
+        log_telemetry_event("WARN", component, action, description, metadata or {})
+        
+    def log_success(self, component: str, action: str, description: str, metadata: Dict[str, Any] = None):
+        log_telemetry_event("SUCCESS", component, action, description, metadata or {})
+        
+    def log_error(self, component: str, action: str, description: str, metadata: Dict[str, Any] = None):
+        log_telemetry_event("ERROR", component, action, description, metadata or {})

@@ -4,7 +4,25 @@ import React, { useState } from 'react';
 
 export default function StrategyPanel() {
   const [slippage, setSlippage] = useState("0.5%");
-  const [psaActive, setPsaActive] = useState(true);
+  const [isScannerActive, setIsScannerActive] = useState(false);
+
+  const handleToggle = async (checked: boolean) => {
+    setIsScannerActive(checked);
+    
+    try {
+      const endpoint = checked ? 'http://localhost:8000/api/scanner/start' : 'http://localhost:8000/api/scanner/stop';
+      const response = await fetch(endpoint, { method: 'POST' });
+      
+      if (!response.ok) {
+          // Revert toggle state if backend fails
+          setIsScannerActive(!checked);
+          console.error("Failed to toggle arbitrage scanner.");
+      }
+    } catch (error) {
+      setIsScannerActive(!checked);
+      console.error("API connection error:", error);
+    }
+  };
 
   return (
     <div className="bg-slate-900/40 border border-slate-900 rounded-xl p-6 flex flex-col space-y-4">
@@ -38,12 +56,12 @@ export default function StrategyPanel() {
                 <div className="flex items-center space-x-3">
                     <div className="h-8 w-8 rounded bg-purple-500/10 flex items-center justify-center text-purple-400"><i className="fa-solid fa-scale-balanced"></i></div>
                     <div>
-                        <span className="text-sm font-bold block">Peg Stability Arbitrage</span>
-                        <span className="text-[10px] text-slate-500">Automatic pool balancing trigger</span>
+                        <span className="text-sm font-bold block">Autonomous Arbitrage Engine</span>
+                        <span className="text-[10px] text-slate-500 block max-w-sm">Continuously scans Mantle L2 DEXs (Agni vs. Merchant Moe) for high-volatility price anomalies on WETH and FBTC, executing atomic flash-loan strikes when profitability clears the Gas Shield.</span>
                     </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={psaActive} onChange={() => setPsaActive(!psaActive)} className="sr-only peer" />
+                    <input type="checkbox" checked={isScannerActive} onChange={(e) => handleToggle(e.target.checked)} className="sr-only peer" />
                     <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-300 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-400 peer-checked:after:bg-slate-950"></div>
                 </label>
             </div>
