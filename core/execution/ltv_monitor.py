@@ -29,11 +29,13 @@ class LTVMonitor:
             return FlywheelSignal(action_required="NONE", metadata={})
 
         ltv = borrowed_usdc / supplied_usd
+        status = "CRITICAL" if ltv >= self.MAX_LTV else "HEALTHY"
+        
         self.logger.log_info(
             component="ltv_monitor",
-            action="evaluate_position",
+            action="metrics_calculated",
             description=f"Current LTV evaluated at {ltv*100:.2f}% (Supplied: ${supplied_usd:.2f}, Borrowed: ${borrowed_usdc:.2f})",
-            metadata={"ltv": ltv}
+            metadata={"ltv": ltv * 100, "debt": borrowed_usdc, "status": status}
         )
 
         # 1. RESCUE logic: LTV exceeds 80%

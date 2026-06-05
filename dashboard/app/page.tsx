@@ -1,14 +1,45 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import OnboardingModal from './components/OnboardingModal';
 import TelemetryFeed from './components/TelemetryFeed';
 import BalancesCard from './components/BalancesCard';
 import StrategyPanel from './components/StrategyPanel';
 import IntentPlayground from './components/IntentPlayground';
+import FlywheelStats from './components/FlywheelStats';
 
 export default function Dashboard() {
   const [isOnboarded, setIsOnboarded] = useState(false);
+  const [flywheelData, setFlywheelData] = useState<{ ltv: number; debt: number; status: 'HEALTHY' | 'CRITICAL' | 'REBALANCING' }>({ ltv: 0, debt: 0, status: 'HEALTHY' });
+  const [isFlywheelActive, setIsFlywheelActive] = useState(false);
+
+  useEffect(() => {
+    // Listen for toggle updates from StrategyPanel
+    const handleToggleEvent = (e: any) => setIsFlywheelActive(e.detail);
+    window.addEventListener('flywheelToggle', handleToggleEvent);
+    
+    const eventSource = new EventSource('/api/telemetry');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.component === 'ltv_monitor' && parsed.action === 'metrics_calculated') {
+          setFlywheelData(prev => ({
+            ltv: parsed.metadata.ltv !== undefined ? parsed.metadata.ltv : prev.ltv,
+            debt: parsed.metadata.debt !== undefined ? parsed.metadata.debt : prev.debt,
+            status: parsed.metadata.status
+          }));
+        }
+      } catch (err) {
+        // ignore parsing errors
+      }
+    };
+
+    return () => {
+        eventSource.close();
+        window.removeEventListener('flywheelToggle', handleToggleEvent);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -91,6 +122,7 @@ export default function Dashboard() {
           {/* COLUMN 2: Intent Playground & Active Strategy (5/12 width) */}
           <section className="lg:col-span-5 flex flex-col space-y-6">
               <IntentPlayground />
+              <FlywheelStats {...flywheelData} isActive={isFlywheelActive} />
               <StrategyPanel />
           </section>
 

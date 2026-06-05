@@ -31,6 +31,14 @@ class FlywheelManagerSkill:
                 metadata={}
             )
             
+            # Emit REBALANCING status immediately before action
+            self.logger.log_info(
+                component="ltv_monitor",
+                action="metrics_calculated",
+                description="Agent is executing RESCUE transaction to rebalance the LTV.",
+                metadata={"status": "REBALANCING"} 
+            )
+            
             # Construct the execution payload for the CLI wrapper
             payload = {
                 "contract_action": "rebalanceDebt",
