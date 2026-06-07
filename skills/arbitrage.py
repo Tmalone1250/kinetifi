@@ -1,18 +1,3 @@
-"""
----
-skill_name: "arbitrage"
-description: >
-  Stochastic Blue-Chip Predator: monitors live price divergence between two DEX
-  pools for volatile assets (WMETH/FBTC) and executes a two-phase arbitrage
-  strategy governed by the Friction Gatekeeper.
-intent_trigger_keywords: ["arbitrage", "spread", "volatile", "wmeth", "fbtc", "flash"]
-whitelisted_assets: ["WMETH", "FBTC"]
-execution_phases:
-  - phase_1: "Micro-Capital Bootstrapper (wallet_usdc < $250) — Spot only, Gas Shield active"
-  - phase_2: "Flash Loan Transition (wallet_usdc >= $250) — Tier 1 flash loans unlocked"
----
-"""
-
 from __future__ import annotations
 
 import time
@@ -63,16 +48,7 @@ class BlockReason(str, Enum):
 # ---------------------------------------------------------------------------
 
 class ArbitrageParams(BaseModel):
-    """
-    Validated input payload for the VolatileArbitrageSkill.
 
-    Attributes:
-        target_asset:        Volatile asset to monitor ('WMETH' or 'FBTC').
-        wallet_usdc_balance: Current wallet USDC balance in USD.
-        target_spread_pct:   Minimum observed spread % required to consider a trade.
-        capital_amount:      USD principal to deploy for spot execution (Phase 1).
-        identity:            Owner wallet address (ERC-8004 Identity).
-    """
     target_asset: str = Field(
         default="WMETH",
         description="Volatile asset pair to monitor (WMETH or FBTC).",
@@ -115,20 +91,7 @@ class ArbitrageParams(BaseModel):
 
 @dataclass
 class GatekeeperResult:
-    """
-    The structured output of evaluate_arbitrage_opportunity().
 
-    Attributes:
-        route:            Approved execution route (SPOT, FLASH, or BLOCKED).
-        phase:            1 (Micro-Cap Bootstrapper) or 2 (Flash Loan Transition).
-        nap_usd:          Net Arbitrage Profitability in USD after all friction costs.
-        gross_profit_usd: Pre-friction gross profit.
-        gas_cost_usd:     Estimated L2 gas cost in USD.
-        amm_fee_usd:      AMM LP fee deducted.
-        flash_premium_usd: Flash loan premium (Phase 2 only; 0.0 in Phase 1).
-        capital_deployed: Actual USD principal used for the calculation.
-        block_reason:     Why the trade was blocked (if applicable).
-    """
     route: ExecutionRoute
     phase: int
     nap_usd: float
@@ -149,51 +112,7 @@ def evaluate_arbitrage_opportunity(
     live_spread_pct: float,
     logger: Any,
 ) -> GatekeeperResult:
-    """
-    The Friction Gatekeeper: stateless, pure-math evaluation of whether a live
-    spread is profitable after deducting all friction costs.
 
-    Phase selection is determined exclusively by ``params.wallet_usdc_balance``:
-
-    Phase 1 — Micro-Capital Bootstrapper (balance < $250):
-        Flash loans are DISABLED. Only spot capital is used.
-
-        Friction model:
-            gross_spot_profit = capital_amount * (live_spread_pct / 100)
-            amm_fee           = capital_amount * AMM_LP_FEE_RATE
-            gas_cost          = GAS_COST_USD (flat L2 estimate)
-            NAP               = gross_spot_profit - amm_fee - gas_cost
-
-        Gas Shield: BLOCK if gas_cost > gross_spot_profit * GAS_SHIELD_RATIO
-        Execution:  SPOT_EXECUTION if NAP > 0
-
-    Phase 2 — Flash Loan Transition (balance >= $250):
-        Flash loans ENABLED. Borrowed capital amplifies the trade.
-
-        Flash principal:
-            flash_principal = clamp(
-                wallet_usdc_balance * FLASH_LEVERAGE_MULTIPLIER,
-                FLASH_MIN_BORROW_USD,
-                FLASH_MAX_BORROW_USD,
-            )
-
-        Friction model:
-            gross_flash_profit = flash_principal * (live_spread_pct / 100)
-            flash_premium      = flash_principal * FLASH_PREMIUM_RATE
-            amm_fee            = flash_principal * AMM_LP_FEE_RATE
-            gas_cost           = GAS_COST_USD
-            NAP                = gross_flash_profit - flash_premium - amm_fee - gas_cost
-
-        SNR Gate: BLOCK if NAP <= 0
-        Execution: FLASH_EXECUTION if NAP > 0
-
-    Args:
-        params:          Validated ArbitrageParams instance.
-        live_spread_pct: Real-time percentage divergence from OnChainClient.
-
-    Returns:
-        GatekeeperResult with the approved route and full cost breakdown.
-    """
     balance: float = params.wallet_usdc_balance
 
     # ── Phase selection ────────────────────────────────────────────────────
@@ -418,15 +337,6 @@ def evaluate_arbitrage_opportunity(
 # ---------------------------------------------------------------------------
 
 class VolatileArbitrageSkill(BaseSkill):
-    """
-    KinetiFi Stochastic Blue-Chip Predator — the live volatile arbitrage skill.
-
-    Lifecycle:
-        1. validate_preflight()  — Fetches live USDC balance and spread from
-                                   OnChainClient, then runs the Friction Gatekeeper.
-        2. execute()             — Routes to SPOT_EXECUTION or FLASH_EXECUTION
-                                   based on the GatekeeperResult.
-    """
 
     def __init__(self, cli_wrapper: Any, logger: Any, onchain_client: OnChainClient) -> None:
         super().__init__()
@@ -521,10 +431,7 @@ class VolatileArbitrageSkill(BaseSkill):
             return None
 
     async def execute(self, payload: dict) -> ExecutionResult:
-        """
-        Main execution entry point. Runs pre-flight validation,
-        then routes to the appropriate execution path using the payload directly.
-        """
+
         t_start: float = time.monotonic()
 
         step_params = payload

@@ -11,10 +11,7 @@ MODEL_NAME = "qwen2.5:7b"
 logger = logging.getLogger(__name__)
 
 def fallback_parse(user_prompt: str):
-    """
-    Attempts to deterministically parse standard intents using regex.
-    Returns a ParsedIntent if successful, otherwise None.
-    """
+
     # Regex for: "swap <amount> <token> to <token>"
     swap_pattern = re.compile(r"(?i)swap\s+([\d\.]+)\s+([A-Za-z0-9]+)\s+(?:to|for)\s+([A-Za-z0-9]+)")
     match = swap_pattern.search(user_prompt)
@@ -37,16 +34,7 @@ def fallback_parse(user_prompt: str):
     return None
 
 async def parse_intent(user_prompt: str) -> ParsedIntent:
-    """
-    Asynchronously parses a natural language user prompt into a structured ParsedIntent.
-    Attempts the deterministic fallback first; if it fails, falls back to Ollama LLM.
-    
-    Args:
-        user_prompt (str): The natural language intent from the user.
-        
-    Returns:
-        ParsedIntent: The validated and structured execution plan.
-    """
+
     # 1. Try deterministic fallback
     logger.info("Executing regex-based fallback engine.")
     try:
