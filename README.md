@@ -8,13 +8,13 @@
 
 Traditional Web3 interactions are highly fragmented, requiring manual, transaction-by-transaction configurations that are prone to high slippage, gas inefficiencies, and human error. Static automation scripts exist, but they lack cognitive reasoning, dynamic parameter adjustment, and safety guardrails.
 
-**KinetiFi** solves this by introducing a **Headless Agentic Wallet OS**. The system constantly monitors live DEXs and Lending protocols, evaluates systemic risks, and executes complex defensive and offensive strategies autonomously on the Mantle L2 network using the native `byreal-cli`.
+**KinetiFi** solves this by introducing a **Headless Agentic Wallet OS**. Operating via a novel **Hierarchical Multi-Agent Framework (Hub-and-Spoke)**, the system constantly monitors live DEXs and Lending protocols, evaluates systemic risks, and executes complex defensive and offensive strategies autonomously across both the **Casper Network** and **Mantle L2**. By heavily restricting tool context (under 7 tools per agent), it ensures sub-second local LLM inference with zero hallucinations.
 
 ### **Core Design Pillars for the Turing Test Hackathon 2026:**
-* **Radical Transparency (SSE Telemetry)**: The agent records every decision step, LLM token metric, and subprocess shell response to a unified JSON telemetry stream, which is piped via Server-Sent Events (SSE) into a Next.js command center.
-* **Autonomous Volatile Arbitrage**: Scans Agni Finance and Merchant Moe for price divergence, dynamically executing cross-DEX atomic strikes to capture risk-free spreads when deviations exceed strict guardrails.
-* **Treasury Flywheel (LTV Monitor)**: Autonomously monitors collateralized lending positions (e.g., FBTC/USDC). If the Loan-to-Value (LTV) ratio breaches critical levels during a flash crash, the agent immediately formulates a Smart Contract rescue payload to unwind liquidity and repay debt.
-* **Dual-Engine On-Chain Integration**: Seamlessly maps transactions through the `byreal-cli` while directly querying active blockchain states (balances, AMM Uniswap V3 slot0 pool feeds) using an asynchronous `web3[async]` provider.
+* **Hierarchical Multi-Agent Orchestration**: A global `Supervisor` routes intents to specialized `Casper` or `Mantle` Chain Routers, which in turn delegate tasks to isolated, highly-specialized domain sub-agents (Yield, Staking, Identity, NFT, Execution).
+* **Radical Transparency (SSE Telemetry)**: The agent hierarchy records every decision step, LLM token metric, and handoff into a unified JSON telemetry stream, which is piped via Server-Sent Events (SSE) into a Next.js command center.
+* **Autonomous Volatile Arbitrage & Treasury Defense**: Scans DEXs for price divergences to execute atomic strikes, and autonomously monitors lending LTVs to formulate Smart Contract rescue payloads during flash crashes.
+* **Dual-Chain Integration**: Seamlessly executes cross-chain operations and queries on the Casper Network via `casper-mcp-py` and Mantle L2 via the `byreal-cli` and `web3[async]` provider.
 
 ---
 
@@ -23,39 +23,45 @@ Traditional Web3 interactions are highly fragmented, requiring manual, transacti
 The KinetiFi system is designed as a decoupled, asynchronous pipeline running inside a secure environment:
 
 ```text
-  ┌───────────────┐        1. FastAPI Command Center           ┌───────────────────┐
-  │  Owner EOA    ├───────────────────────────────────────────►│  KinetiFi Agent   │
-  │  (MetaMask)   │◄──────────────────────────────────────────┤  Orchestration    │
-  └───────────────┘        4. Co-sign Actions /                │  Engine (Backend) │
-                           Automated Execution                 └─────────┬─────────┘
-                                                                         │
-  ┌───────────────┐                                                      │ 2. Deploy
-  │  Mantle L2    │◄─────────────────────────────────────────────────────┤    Smart Account
-  │  Blockchain   │◄────────── [ 3. Mint ERC-8004 Identity ] ────────────┤    (ERC-4337 Proxy)
-  └───────┬───────┘                                                      │
-          │                                                              ▼
-          │ (On-Chain Settlement)                             ┌───────────────────┐
-          └──────────────────────────────────────────────────►│  byreal-cli Shell │
-                                                              └──────────┬────────┘
-                                                                         │
-                                                                         ▼ (Captures stdout)
-  ┌───────────────┐        5. Renders Event Feeds via SSE     ┌───────────────────┐
-  │  Next.js      │◄──────────────────────────────────────────┤  Telemetry Engine │
-  │  Dashboard    │                                           │  Writes to Local  │
-  └───────────────┘                                           │  JSON File Store  │
-                                                              └───────────────────┘
+  ┌───────────────┐        1. Global User Intent               ┌───────────────────┐
+  │  Owner EOA    ├───────────────────────────────────────────►│  Supervisor Agent │
+  │  (MetaMask/   │◄──────────────────────────────────────────┤  (Global Router)  │
+  │  Casper Dash) │        4. Co-sign Actions /                └────┬─────────┬────┘
+  └───────────────┘        Automated Execution                      │         │
+                                                          ┌─────────▼─┐     ┌─▼─────────┐
+                                              2. Route to │  Casper   │     │  Mantle   │
+                                                 Chains   │  Router   │     │  Router   │
+                                                          └────┬──────┘     └─────┬─────┘
+  ┌───────────────┐                                            │                  │
+  │  Casper &     │◄──────── [ 3. Handoff to Domains ] ────────┼──────────────────┘
+  │  Mantle L2    │◄──────── (Yield, Staking, DEX, etc.) ──────▼
+  └───────┬───────┘                                     ┌───────────────────┐
+          │                                             │ Domain Sub-Agents │
+          │ (On-Chain Settlement)                       └────────┬──────────┘
+          └──────────────────────────────────────────────────────┤
+                                                                 ▼ (Captures Output)
+  ┌───────────────┐        5. Renders Event Feeds via SSE ┌───────────────────┐
+  │  Next.js      │◄──────────────────────────────────────┤  Telemetry Engine │
+  │  Dashboard    │                                       │  (Decision Logs)  │
+  └───────────────┘                                       └───────────────────┘
 ```
 
 ---
 
 ## **3. The KinetiFi Subsystems**
 
-### **3.1 Live On-Chain Client (`core/execution/onchain_client.py`)**
-Establishes a high-fidelity cryptographic connection layer to the Mantle Network.
-- **Real-Time State Queries**: Interacts with the live Mantle RPC gateway using `web3[async]`.
+### **3.1 Hierarchical Multi-Agent Engine (`core/agents/`)**
+The brain of KinetiFi. It breaks down monolithic prompts into microscopic contexts:
+- **Supervisor (`supervisor.py`)**: Routes global intents to specific chains without loading execution tools.
+- **Chain Routers (`casper_agent.py`, `mantle_agent.py`)**: Delegates tasks to domain sub-agents.
+- **Specialized Sub-Agents (`sub_agents/`)**: Micro-agents with < 7 tools each (e.g., Yield, Staking, Identity) to guarantee sub-second local LLM inference.
+
+### **3.2 Live On-Chain Client (`core/execution/onchain_client.py`)**
+Establishes a high-fidelity cryptographic connection layer to the networks.
+- **Real-Time State Queries**: Interacts with the live Mantle RPC gateway using `web3[async]` and Casper via `casper-mcp-py`.
 - **Uniswap V3 Pool Oracles**: Queries the active `slot0` state of Agni and Merchant Moe pools on Mantle L2, parsing `sqrtPriceX96` to compute live conversion ratios dynamically.
 
-### **3.2 Multi-DEX Scanner (`core/execution/dex_scanner.py`)**
+### **3.3 Multi-DEX Scanner (`core/execution/dex_scanner.py`)**
 A highly concurrent polling daemon that extracts and compares prices across major DEXs for Volatile Blue-Chips (WMETH, FBTC) to identify arbitrage opportunities.
 
 ### **3.3 LTV Monitor (`core/execution/ltv_monitor.py`)**
@@ -85,6 +91,11 @@ kinetifi/
 ├── dashboard/              # Next.js 14 App Router UI (React, Tailwind, Wagmi)
 ├── contracts/              # MockMantleDeFi.sol Sandbox Smart Contracts
 ├── core/
+│   ├── agents/             # Hierarchical Agent System
+│   │   ├── supervisor.py   # Global Orchestrator
+│   │   ├── casper_agent.py # Casper Chain Router
+│   │   ├── mantle_agent.py # Mantle Chain Router
+│   │   └── sub_agents/     # Hyper-Specialized Domain Agents
 │   ├── execution/          # Non-blocking blockchain bindings
 │   │   ├── cli_wrapper.py  # Asynchronous subprocess executor
 │   │   ├── dex_scanner.py  # Agni vs Merchant Moe polling daemon
