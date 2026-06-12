@@ -45,7 +45,9 @@ def log_telemetry_event(level: str, component: str, action: str, description: st
     # JSON Append-only Telemetry persistence
     try:
         with open(EVENT_STREAM_PATH, "a") as f:
-            f.write(json.dumps(event) + "\n")
+            # Explicitly serialize the payload to strictly double-quoted JSON,
+            # and fallback to str for non-serializable objects to prevent crashes.
+            f.write(json.dumps(event, default=str) + "\n")
     except Exception as e:
         logger.error(f"FATAL: Could not write to telemetry stream {EVENT_STREAM_PATH}: {e}")
 

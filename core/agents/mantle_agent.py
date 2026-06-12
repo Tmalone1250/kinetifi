@@ -1,78 +1,77 @@
 import os
-from typing import Dict, Any, List
+import sys
+# Add the root KinetiFi directory to the python path so 'core' can be resolved
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+import asyncio
+import json
+from typing import Dict, Any
 from core.observability.decision_log import log_telemetry_event
-from core.execution.onchain_client import OnChainClient
-from core.execution.dex_scanner import MultiDexScanner
-from core.execution.ltv_monitor import LTVMonitor
+from core.agents.mantle_yield_agent import MantleYieldAgent
+from core.agents.mantle_identity_agent import MantleIdentityAgent
 
-class MantleSpecialistAgent:
+class MantleChainRouter:
     """
-    The Mantle Specialist Agent (The EVM Executioner).
-    Handles all legacy EVM logic and strictly avoids Casper/Wasm dependencies.
+    The Mantle Chain Router.
+    Analyzes intent and delegates to specialized agents. Never touches the blockchain directly.
     """
 
-    def __init__(self, rpc_url: str = "https://rpc.mantle.xyz") -> None:
-        self.rpc_url = rpc_url
-        self.onchain_client = OnChainClient(rpc_url=self.rpc_url)
-        self.ltv_monitor = LTVMonitor(logger=None) # Assume handled in integration
-        self.dex_scanner = MultiDexScanner(onchain_client=self.onchain_client, logger=None)
-        
-        self.system_prompt = (
-            "You are the Mantle Specialist Agent (The EVM Executioner). "
-            "You execute operations on the Mantle Network using your built-in EVM tools. "
-            "You handle Agni Finance, Merchant Moe APY scanners, and gas trackers. "
-            "Avoid cross-contamination with Wasm operations."
-        )
-
-        self.allowed_tools = [
-            "get_erc20_balance",
-            "get_pool_price_agni",
-            "get_pool_price_moe",
-            "evaluate_position",
-            "add_scanner_target",
-            "start_scanner",
-            "stop_scanner"
-        ]
-
-    async def execute_intent(self, prompt: str) -> Dict[str, Any]:
-        """
-        Processes a delegated intent utilizing the local EVM tool integrations.
-        """
+    def __init__(self):
         log_telemetry_event(
             level="INFO",
-            component="mantle_agent",
+            component="mantle_chain_router",
             action="init",
-            description="Initializing Mantle Specialist Agent for EVM execution.",
-            metadata={"rpc_url": self.rpc_url}
-        )
-        
-        log_telemetry_event(
-            level="INFO",
-            component="mantle_agent",
-            action="tool_load",
-            description="Loaded legacy EVM tools into agent context.",
-            metadata={"loaded_tools": self.allowed_tools}
+            description="Initializing Mantle Chain Router.",
+            metadata={}
         )
 
-        # In a full implementation, we would pass the system prompt, loaded tools, 
-        # and user prompt to a local LLM to execute.
-        # For this phase, we simulate the completion of the EVM operations.
-        
+    async def connect_and_execute(self, prompt: str) -> Dict[str, Any]:
+        """
+        Processes a delegated intent and routes to sub-agents.
+        """
         log_telemetry_event(
             level="INFO",
-            component="mantle_agent",
-            action="execute",
-            description="Executing EVM strategy using Agni/Moe integrations.",
-            metadata={"prompt": prompt, "system_prompt_used": True}
+            component="mantle_chain_router",
+            action="route",
+            description="Routing intent for Mantle network.",
+            metadata={"prompt": prompt}
         )
+
+        final_data = {}
+        sub_results = {}
+        prompt_lower = prompt.lower()
         
-        # Return TaskCompleted response expected by the Supervisor in Phase 4
+        # Check for Yield/DEX intent
+        yield_keywords = ["yield", "meth", "usdy", "quote", "swap", "agni", "moe"]
+        if any(kw in prompt_lower for kw in yield_keywords):
+            yield_agent = MantleYieldAgent()
+            res = await yield_agent.execute(prompt)
+            final_data.update(res.get("results", {}))
+            sub_results["mantle_yield_agent"] = res
+            
+        # Check for Identity intent
+        identity_keywords = ["identity", "erc8004", "profile", "reputation", "register"]
+        if any(kw in prompt_lower for kw in identity_keywords):
+            identity_agent = MantleIdentityAgent()
+            res = await identity_agent.execute(prompt)
+            final_data["identity_data"] = res.get("results", {})
+            sub_results["mantle_identity_agent"] = res
+
         return {
             "status": "TaskCompleted",
-            "agent": "mantle",
-            "result": "Successfully executed Mantle EVM operations.",
+            "agent": "mantle_chain_router",
+            "data": final_data,
             "details": {
-                "loaded_tools": self.allowed_tools,
-                "evm_execution": True
+                "sub_agent_results": sub_results,
+                "zero_trust_enforced": True
             }
         }
+
+if __name__ == "__main__":
+    async def main():
+        print("Testing MantleChainRouter...")
+        router = MantleChainRouter()
+        res = await router.connect_and_execute("Register my ERC-8004 identity and check my reputation score.")
+        print("\nRouter Result:\n" + json.dumps(res, indent=2))
+    
+    asyncio.run(main())

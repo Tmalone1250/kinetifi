@@ -2,11 +2,10 @@
 
 import React, { useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function OnboardingModal({ onComplete }: { onComplete: () => void }) {
-  const { isConnected, address } = useAccount();
+  const { isConnected, address, chainId } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const [step, setStep] = useState(0); 
   const [loading, setLoading] = useState(false);
@@ -47,12 +46,16 @@ export default function OnboardingModal({ onComplete }: { onComplete: () => void
     return <div className="text-gray-400">Loading KinetiFi Secure Enclave...</div>;
   }
 
-  if (!isConnected) {
+  if (!isConnected || chainId !== 5003) {
     return (
       <div className="flex flex-col items-center justify-center p-10 bg-black/60 backdrop-blur-md border border-emerald-500/40 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.15)] max-w-md w-full text-center">
         <h2 className="text-2xl font-bold text-white mb-2">Connect Owner Signer</h2>
-        <p className="text-sm text-gray-400 mb-8">Authenticate with your EOA to begin the Smart Account transition sequence.</p>
-        <ConnectButton />
+        <p className="text-sm text-gray-400 mb-8">
+          {isConnected && chainId !== 5003 
+            ? "Please switch your wallet to Mantle Sepolia Testnet." 
+            : "Authenticate with your EOA to begin the Smart Account transition sequence."}
+        </p>
+        <appkit-button />
       </div>
     );
   }

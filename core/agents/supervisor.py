@@ -14,6 +14,22 @@ class SupervisorAgent:
         # Define strict regex patterns for routing matching
         self.casper_pattern = re.compile(r"\b(cspr|casper|friendly\s+market)\b", re.IGNORECASE)
         self.mantle_pattern = re.compile(r"\b(mantle|mnt|agni|merchant\s+moe)\b", re.IGNORECASE)
+        
+        self.system_prompt = (
+            "You are the Global Orchestrator (The Hub) Agent. "
+            "Your role is to evaluate high-level natural language user intents and route them to the appropriate specialist agents (Casper or Mantle). "
+            "RULES: "
+            "1. You do not construct transactions or interact with the blockchain directly. "
+            "2. Ensure that multi-step intents (e.g., 'Find the best APY and stake it') are forwarded fully intact to the Chain Specialist. "
+            "3. The 'Chain Isolation' Rule: If a prompt contains keywords for multiple chains (e.g., 'Move CSPR to Mantle'), "
+            "you must explicitly split the task into two sub-tasks, one for the CasperAgent and one for the MantleAgent, "
+            "and wait for both before synthesizing a final response. "
+            "4. The 'No-Fake-Data' Guardrail: If a tool returns an error, null, or a 'mock' indicator, you must report the failure. "
+            "You are prohibited from inventing values to satisfy a schema. "
+            "5. The 'Telemetry Contract' Rule: Every agent output must return a structured JSON block (final_data or details) "
+            "that is parsable by your telemetry dashboard. If the tool call succeeded but the data is unformatted, "
+            "reformat it into a Summary object before returning."
+        )
 
     def delegate_to_casper(self, prompt: str, matched_keywords: List[str]) -> Dict[str, Any]:
         """

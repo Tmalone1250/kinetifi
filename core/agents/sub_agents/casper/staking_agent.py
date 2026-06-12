@@ -2,38 +2,8 @@ import os
 from typing import Dict, Any, List
 from core.observability.decision_log import log_telemetry_event
 
-try:
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-except ImportError:
-    class StdioServerParameters:
-        def __init__(self, command, args):
-            self.command = command
-            self.args = args
-    
-    class ClientSession:
-        def __init__(self, read, write): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-        async def initialize(self): pass
-        async def list_tools(self): 
-            class ToolList:
-                class Tool:
-                    def __init__(self, name): self.name = name
-                tools = [
-                    Tool("get_validators"), 
-                    Tool("get_validator_info"), 
-                    Tool("get_bidders"),
-                    Tool("get_bidder"),
-                    Tool("get_account_delegations")
-                ]
-            return ToolList()
-            
-    def stdio_client(params):
-        class StdioContext:
-            async def __aenter__(self): return (None, None)
-            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-        return StdioContext()
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 
 class CasperStakingAgent:
@@ -50,8 +20,15 @@ class CasperStakingAgent:
         
         self.system_prompt = (
             "You are the Casper Staking Agent. "
-            "Your domain is limited to staking operations, validator performance scanning, and delegations. "
-            "Use the provided tools to fetch validator stats, inspect bids, and view delegations."
+            "Your domain is L1 Validator and Delegation tracking. "
+            "RULES: "
+            "1. Understand the difference between liquid yield (DEX) and core network staking. "
+            "2. Provide concise validator metrics (fee, total stake) using the specific tools available. "
+            "3. The 'No-Fake-Data' Guardrail: If a tool returns an error, null, or a 'mock' indicator, you must report the failure. "
+            "You are prohibited from inventing values to satisfy a schema. "
+            "4. The 'Telemetry Contract' Rule: Every agent output must return a structured JSON block (final_data or details) "
+            "that is parsable by your telemetry dashboard. If the tool call succeeded but the data is unformatted, "
+            "reformat it into a Summary object before returning."
         )
         self.allowed_tools = [
             "get_validators",
@@ -74,18 +51,36 @@ class CasperStakingAgent:
         )
 
         loaded_tools: List[str] = []
+        raw_results: Dict[str, Any] = {}
+        import json
 
         casper_params = StdioServerParameters(
             command="python3",
-            args=[self.casper_server_path, "--enable-writes"],
+            args=[self.casper_server_path],
         )
-        async with stdio_client(casper_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools_response = await session.list_tools()
-                for tool in tools_response.tools:
-                    if tool.name in self.allowed_tools:
-                        loaded_tools.append(tool.name)
+        try:
+            async with stdio_client(casper_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools_response = await session.list_tools()
+                    for tool in tools_response.tools:
+                        if tool.name in self.allowed_tools:
+                            loaded_tools.append(tool.name)
+                            
+                    if "get_validators" in loaded_tools:
+                        res = await session.call_tool("get_validators")
+                        if hasattr(res, "content") and len(res.content) > 0:
+                            text_data = getattr(res.content[0], "text", str(res.content[0]))
+                            print(f"DEBUG: Tool Output for get_validators: {text_data}")
+                            try:
+                                raw_results["get_validators"] = json.loads(text_data)
+                            except Exception:
+                                raw_results["get_validators"] = text_data
+        except Exception as e:
+            raw_results["casper_mcp_error"] = str(e)
+            
+        # Deduplicate loaded tools
+        loaded_tools = list(dict.fromkeys(loaded_tools))
 
         log_telemetry_event(
             level="INFO",
@@ -100,13 +95,18 @@ class CasperStakingAgent:
             component="casper_staking_agent",
             action="execute_sop",
             description="Executing Staking analysis SOP.",
-            metadata={"prompt": prompt, "system_prompt_used": True}
+            metadata={
+                "prompt": prompt, 
+                "system_prompt_used": True,
+                "raw_results": raw_results
+            }
         )
 
         return {
             "status": "TaskCompleted",
             "agent": "casper_staking_agent",
             "result": "Successfully checked staking state and validators.",
+            "data": raw_results,
             "details": {
                 "loaded_tools": loaded_tools,
                 "sop_followed": True

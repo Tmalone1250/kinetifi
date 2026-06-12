@@ -8,13 +8,13 @@ import {
 } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 import { WagmiProvider } from 'wagmi';
-import { mainnet, sepolia, mantle } from 'wagmi/chains';
+import { mantleSepoliaTestnet } from 'wagmi/chains';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 
 const config = getDefaultConfig({
   appName: 'KinetiFi Agentic Wallet OS',
   projectId: 'a29b6bc16db9c6e5f15d2a3f721516e8', // generic project id for hackathon
-  chains: [mantle, mainnet, sepolia],
+  chains: [mantleSepoliaTestnet],
   ssr: true,
 });
 

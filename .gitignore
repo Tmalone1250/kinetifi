@@ -5,5 +5,9 @@ __pycache__/
 docs/
 .ai_rules
 telemetry/
-tests/
+sandbox/
+legacy_archive/
+casper-mcp-py/
+kinetifi-mcp/
+mantle-mcp/
 Assets/Demo/

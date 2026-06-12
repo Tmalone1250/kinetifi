@@ -109,9 +109,12 @@ kinetifi/
 │   ├── base.py             # Abstract Base Class for skills
 │   ├── arbitrage.py        # Volatile Arbitrage strategy
 │   └── flywheel_manager.py # Flash Crash Rescue strategy
-└── tests/                  # Deterministic Sandbox Simulations
-    ├── run_stochastic_simulation.py  # Injects a Whale Dump for Arbitrage
-    └── run_flywheel_simulation.py    # Injects a Flash Crash for Flywheel
+└── sandbox/                # Sandbox, test suites, queries, and logs (ignored in git)
+    ├── tests/              # Deterministic Sandbox Simulations
+    │   ├── run_stochastic_simulation.py  # Injects a Whale Dump for Arbitrage
+    │   └── run_flywheel_simulation.py    # Injects a Flash Crash for Flywheel
+    ├── queries/            # Entrypoint and ABI query scripts (e.g., query_abi.py)
+    └── logs/               # Local node/simulation log outputs (e.g., anvil.log)
 ```
 
 ---
@@ -146,12 +149,12 @@ KinetiFi is built with a highly deterministic local testing environment running 
 
 **Scenario A: The Stochastic Whale Dump (Arbitrage)**
 ```bash
-.venv/bin/python tests/run_stochastic_simulation.py
+PYTHONPATH=. .venv/bin/python sandbox/tests/run_stochastic_simulation.py
 ```
 
 **Scenario B: The Flash Crash (Treasury Flywheel Rescue)**
 ```bash
-.venv/bin/python tests/run_flywheel_simulation.py
+PYTHONPATH=. .venv/bin/python sandbox/tests/run_flywheel_simulation.py
 ```
 
 ---

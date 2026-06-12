@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { Providers } from './Providers';
+import { AppKitProvider } from './AppKitProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 const geistSans = Geist({
@@ -30,7 +30,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </head>
       <body className="antialiased bg-slate-950 text-slate-100 min-h-screen selection:bg-cyan-400 selection:text-slate-950">
-        <Providers>{children}</Providers>
+        <AppKitProvider>{children}</AppKitProvider>
       </body>
     </html>
   );

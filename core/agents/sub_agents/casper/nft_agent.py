@@ -2,38 +2,8 @@ import os
 from typing import Dict, Any, List
 from core.observability.decision_log import log_telemetry_event
 
-try:
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-except ImportError:
-    class StdioServerParameters:
-        def __init__(self, command, args):
-            self.command = command
-            self.args = args
-    
-    class ClientSession:
-        def __init__(self, read, write): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-        async def initialize(self): pass
-        async def list_tools(self): 
-            class ToolList:
-                class Tool:
-                    def __init__(self, name): self.name = name
-                tools = [
-                    Tool("get_network_nfts"), 
-                    Tool("get_nft_collection"), 
-                    Tool("get_nft"),
-                    Tool("get_account_nfts"),
-                    Tool("get_account_nft_ownership")
-                ]
-            return ToolList()
-            
-    def stdio_client(params):
-        class StdioContext:
-            async def __aenter__(self): return (None, None)
-            async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-        return StdioContext()
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 
 class CasperNftAgent:
@@ -50,8 +20,14 @@ class CasperNftAgent:
         
         self.system_prompt = (
             "You are the Casper NFT Agent. "
-            "Your domain is limited to NFT metadata query, collection stats, and ownership status. "
-            "Use the provided tools to inspect NFT collections, check owner lists, and fetch token details."
+            "Your domain is read-only data retrieval for formatting NFT metadata. "
+            "RULES: "
+            "1. Provide structured outputs for formatting NFT metadata. "
+            "2. The 'No-Fake-Data' Guardrail: If a tool returns an error, null, or a 'mock' indicator, you must report the failure. "
+            "You are prohibited from inventing values to satisfy a schema. "
+            "3. The 'Telemetry Contract' Rule: Every agent output must return a structured JSON block (final_data or details) "
+            "that is parsable by your telemetry dashboard. If the tool call succeeded but the data is unformatted, "
+            "reformat it into a Summary object before returning."
         )
         self.allowed_tools = [
             "get_network_nfts",
@@ -74,18 +50,36 @@ class CasperNftAgent:
         )
 
         loaded_tools: List[str] = []
+        raw_results: Dict[str, Any] = {}
+        import json
 
         casper_params = StdioServerParameters(
             command="python3",
-            args=[self.casper_server_path, "--enable-writes"],
+            args=[self.casper_server_path],
         )
-        async with stdio_client(casper_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools_response = await session.list_tools()
-                for tool in tools_response.tools:
-                    if tool.name in self.allowed_tools:
-                        loaded_tools.append(tool.name)
+        try:
+            async with stdio_client(casper_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    tools_response = await session.list_tools()
+                    for tool in tools_response.tools:
+                        if tool.name in self.allowed_tools:
+                            loaded_tools.append(tool.name)
+                            
+                    if "get_account_nfts" in loaded_tools:
+                        res = await session.call_tool("get_account_nfts")
+                        if hasattr(res, "content") and len(res.content) > 0:
+                            text_data = getattr(res.content[0], "text", str(res.content[0]))
+                            print(f"DEBUG: Tool Output for get_account_nfts: {text_data}")
+                            try:
+                                raw_results["get_account_nfts"] = json.loads(text_data)
+                            except Exception:
+                                raw_results["get_account_nfts"] = text_data
+        except Exception as e:
+            raw_results["casper_mcp_error"] = str(e)
+            
+        # Deduplicate loaded tools
+        loaded_tools = list(dict.fromkeys(loaded_tools))
 
         log_telemetry_event(
             level="INFO",
@@ -100,13 +94,18 @@ class CasperNftAgent:
             component="casper_nft_agent",
             action="execute_sop",
             description="Executing NFT analysis SOP.",
-            metadata={"prompt": prompt, "system_prompt_used": True}
+            metadata={
+                "prompt": prompt, 
+                "system_prompt_used": True,
+                "raw_results": raw_results
+            }
         )
 
         return {
             "status": "TaskCompleted",
             "agent": "casper_nft_agent",
             "result": "Successfully checked NFT data and ownership.",
+            "data": raw_results,
             "details": {
                 "loaded_tools": loaded_tools,
                 "sop_followed": True

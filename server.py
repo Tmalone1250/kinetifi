@@ -6,6 +6,10 @@ from core.observability.decision_log import TelemetryLogger
 from core.execution.ltv_monitor import LTVMonitor
 from skills.flywheel_manager import FlywheelManagerSkill
 import asyncio
+from pydantic import BaseModel
+from core.agents.supervisor import SupervisorAgent
+from core.agents.casper_agent import CasperSpecialistAgent
+from core.agents.mantle_agent import MantleSpecialistAgent
 
 app = FastAPI(title="KinetiFi Daemon API")
 
@@ -104,4 +108,25 @@ async def stop_flywheel_monitor():
         is_flywheel_running = False
         return {"status": "Flywheel Monitor Inactive"}
     return {"status": "Flywheel Monitor Not Running"}
+
+class ChatRequest(BaseModel):
+    intent: str
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    """Entry point for the Dashboard UI chat intents."""
+    supervisor = SupervisorAgent()
+    route_res = supervisor.route_intent(req.intent)
+    
+    if route_res.get("status") == "delegated":
+        if route_res.get("target_agent") == "casper":
+            casper_router = CasperSpecialistAgent()
+            final_res = await casper_router.connect_and_execute(req.intent)
+            return final_res
+        elif route_res.get("target_agent") == "mantle":
+            mantle_router = MantleSpecialistAgent()
+            final_res = await mantle_router.connect_and_execute(req.intent)
+            return final_res
+            
+    return route_res
 

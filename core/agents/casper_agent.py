@@ -27,8 +27,16 @@ class CasperSpecialistAgent:
         
         self.system_prompt = (
             "You are the Casper Chain Department Router. "
-            "Your role is to analyze the prompt, route to the correct sub-agent(s), "
-            "and combine the results of their execution."
+            "Your role is to orchestrate the Casper network by analyzing the intent and determining the precise sequence of sub-agents to invoke. "
+            "RULES: "
+            "1. You must correctly dispatch to the specific sub-agents (yield, staking, execution, identity, nft) ensuring logical flow. "
+            "2. For example, if the user wants to stake on a DEX, you must instruct the Yield Agent to find the pool, "
+            "and then trigger the Yield Agent's execution flow. "
+            "3. The 'No-Fake-Data' Guardrail: If a tool returns an error, null, or a 'mock' indicator, you must report the failure. "
+            "You are prohibited from inventing values to satisfy a schema. "
+            "4. The 'Telemetry Contract' Rule: Every agent output must return a structured JSON block (final_data or details) "
+            "that is parsable by your telemetry dashboard. If the tool call succeeded but the data is unformatted, "
+            "reformat it into a Summary object before returning."
         )
         self.allowed_tools: List[str] = []  # Loads 0 low-level execution tools directly
 
@@ -96,12 +104,20 @@ class CasperSpecialistAgent:
 
         sub_results: List[Dict[str, Any]] = []
         combined_tools: List[str] = []
+        final_data: Dict[str, Any] = {}
+        sub_agent_data_dump: Dict[str, Any] = {}
 
         for name, sub_agent in matched_agents:
             res = await sub_agent.connect_and_execute(prompt)
             sub_results.append(res)
             if "details" in res and "loaded_tools" in res["details"]:
                 combined_tools.extend(res["details"]["loaded_tools"])
+            
+            # Aggregate the 'data' field from the sub-agent if it exists
+            if "data" in res and isinstance(res["data"], dict):
+                print(f"DEBUG: Router received data from {name}: {res['data']}")
+                final_data.update(res["data"])
+                sub_agent_data_dump[name] = res["data"]
 
         # Deduplicate combined tools list
         combined_tools = list(dict.fromkeys(combined_tools))
@@ -111,6 +127,7 @@ class CasperSpecialistAgent:
             "status": "TaskCompleted",
             "agent": "casper",
             "result": f"Successfully completed Casper operations via sub-agents: {', '.join([n for n, _ in matched_agents])}.",
+            "data": final_data,
             "details": {
                 "sub_agent_results": sub_results,
                 "loaded_tools": combined_tools,
@@ -123,7 +140,12 @@ class CasperSpecialistAgent:
             component="casper_agent",
             action="execute_complete",
             description="All sub-agents completed execution successfully.",
-            metadata={"final_result": final_result}
+            metadata={
+                "final_result": final_result,
+                "final_data": final_data,
+                "payload_dump": final_data,
+                "sub_agent_data_dump": sub_agent_data_dump
+            }
         )
 
         return final_result
