@@ -3,6 +3,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any
+import ast
 
 # Ensure telemetry directory exists relative to project root
 TELEMETRY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "telemetry"))
@@ -67,3 +68,34 @@ class TelemetryLogger:
         
     def log_error(self, component: str, action: str, description: str, metadata: Dict[str, Any] = None):
         log_telemetry_event("ERROR", component, action, description, metadata or {})
+
+def extract_lendle_bundle_robust(tool_message_content) -> list:
+    """Robustly extracts the bundle array from various ToolMessage formats."""
+    try:
+        if isinstance(tool_message_content, str):
+            # Prefer json.loads as the primary attempt before falling back to ast
+            try:
+                parsed = json.loads(tool_message_content)
+                if isinstance(parsed, dict):
+                    return parsed.get("bundle", [])
+            except (ValueError, SyntaxError):
+                pass
+                
+            try:
+                parsed = ast.literal_eval(tool_message_content)
+                if isinstance(parsed, dict):
+                    return parsed.get("bundle", [])
+            except (ValueError, SyntaxError):
+                pass
+                
+            return []
+        
+        if isinstance(tool_message_content, dict):
+            return tool_message_content.get("bundle", [])
+            
+        if isinstance(tool_message_content, list):
+            return tool_message_content
+            
+    except Exception:
+        pass
+    return []

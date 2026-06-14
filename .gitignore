@@ -11,3 +11,10 @@ casper-mcp-py/
 kinetifi-mcp/
 mantle-mcp/
 Assets/Demo/
+*.db
+*.db-shm
+*.db-wal
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/foundry.lock

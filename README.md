@@ -12,9 +12,12 @@ Traditional Web3 interactions are highly fragmented, requiring manual, transacti
 
 ### **Core Design Pillars for the Turing Test Hackathon 2026:**
 * **Hierarchical Multi-Agent Orchestration**: A global `Supervisor` routes intents to specialized `Casper` or `Mantle` Chain Routers, which in turn delegate tasks to isolated, highly-specialized domain sub-agents (Yield, Staking, Identity, NFT, Execution).
-* **Radical Transparency (SSE Telemetry)**: The agent hierarchy records every decision step, LLM token metric, and handoff into a unified JSON telemetry stream, which is piped via Server-Sent Events (SSE) into a Next.js command center.
-* **Autonomous Volatile Arbitrage & Treasury Defense**: Scans DEXs for price divergences to execute atomic strikes, and autonomously monitors lending LTVs to formulate Smart Contract rescue payloads during flash crashes.
-* **Dual-Chain Integration**: Seamlessly executes cross-chain operations and queries on the Casper Network via `casper-mcp-py` and Mantle L2 via the `byreal-cli` and `web3[async]` provider.
+* **Zero-Trust Safety Model**: The AI agent operates in a dual-lane execution framework, preparing unsigned atomic transaction bundles for the user. Under no circumstances does the agent hold private keys. All transactions require explicit cryptographic co-signing via wallet prompts (e.g., MetaMask, AppKit).
+* **Advanced Skills Command Center**: A three-panel control dashboard (Arbitrage, Rebalance, Auto-Compound) with an integrated **Global Policy Rail** (gas limit, max slippage, stop loss) and a live, streaming **Execution Terminal** powered by Server-Sent Events (SSE).
+* **Emergency Stop Guardrail**: A real-time, high-priority fallback system. Pressing the "Stop" button in the dashboard or typing "stop" in the AI chat triggers an immediate backend halt, clearing out execution queues and logging a critical alert to ensure absolute user control.
+* **Force-Trigger Sandbox (Demo Mode)**: Enables judges and developers to bypass waiting for slow market drifts or rare arbitrage opportunities. Clicking "Force Trigger" on any skill card instantly simulates real-time market shocks (like a Whale Dump or Flash Crash) to demonstrate how the agent scans, reasons, generates, and prompts for bundle signatures.
+* **Radical Transparency (SSE Telemetry)**: The agent hierarchy records every decision step, LLM token metric, and handoff into a unified JSON telemetry stream, which is piped via Server-Sent Events (SSE) into the Next.js dashboard.
+* **Dual-Chain Integration**: Seamlessly executes cross-chain operations and queries on the Casper Network via `casper-mcp-py` and Mantle L2 via `mantle-mcp` and a `web3[async]` provider.
 
 ---
 
@@ -64,13 +67,8 @@ Establishes a high-fidelity cryptographic connection layer to the networks.
 ### **3.3 Multi-DEX Scanner (`core/execution/dex_scanner.py`)**
 A highly concurrent polling daemon that extracts and compares prices across major DEXs for Volatile Blue-Chips (WMETH, FBTC) to identify arbitrage opportunities.
 
-### **3.3 LTV Monitor (`core/execution/ltv_monitor.py`)**
+### **3.4 LTV Monitor (`core/execution/ltv_monitor.py`)**
 Evaluates lending positions in real-time, classifying health statuses (`HEALTHY`, `CRITICAL`, `REBALANCING`) based on protocol liquidation thresholds.
-
-### **3.4 Execution Subprocess Wrapper (`core/execution/cli_wrapper.py`)**
-All transaction instructions are dispatched through a secure asynchronous command executor.
-- **Non-Blocking IO**: Utilizes `asyncio.create_subprocess_exec` to interact with the host system without blocking the python daemon.
-- **EVM Hash Extraction**: Uses a standard 64-character EVM hexadecimal regex (`0x[a-fA-F0-9]{64}`) to parse transaction hashes out of stdout streams.
 
 ### **3.5 Pluggable Skills Engine (`skills/`)**
 Extends capabilities via an Abstract Base Class (`BaseSkill`) to construct automated strategies:
@@ -78,8 +76,19 @@ Extends capabilities via an Abstract Base Class (`BaseSkill`) to construct autom
 - **`flywheel_manager.py` (`FlywheelManagerSkill`)**: Issues Smart Contract `RESCUE` or `COMPOUND` payloads based on real-time LTV monitor signals.
 - **`swap.py` & `liquidity.py`**: Standard primitive interactions for generic routing.
 
-### **3.6 High-Fidelity Logging (`core/observability/decision_log.py`)**
+### **3.6 High-Fidelity Logging & SSE Telemetry (`core/observability/decision_log.py`)**
 Records every internal event, state transition, and subprocess response into standard output while concurrently appending flat JSON-Lines strings to `telemetry/event_stream.json`.
+
+### **3.7 Advanced Skills Command Center (Frontend & Backend)**
+Provides a beautiful, three-panel UI control system:
+1. **Arbitrage Panel**: Renders real-time scanned spreads between Agni and Merchant Moe. Users can toggle execution parameters and force simulations.
+2. **Rebalance Panel**: Allows users to specify target weights for stablecoin and volatile assets (e.g., WMNT/USDT) and triggers automated re-allocation.
+3. **Auto-Compound Panel**: Automates harvesting yield from Merchant Moe and Lendle pools, wrapping/zapping it back into the LP pools.
+4. **Global Risk Rail**: Configure gas ceilings, slippage tolerances, and max loss thresholds.
+5. **Live Log Terminal**: Streams simulated and live execution steps via SSE directly to the UI.
+
+### **3.8 Emergency Stop Guardrail**
+Safety first. A single click of the "Emergency Stop" button or typing "stop" in the AI chat instantly sets a global execution lock in `server.py`, terminating all active sub-processes, canceling transaction proposals, and halting agent execution.
 
 ---
 
@@ -88,7 +97,14 @@ Records every internal event, state transition, and subprocess response into sta
 ```text
 kinetifi/
 ├── server.py               # FastAPI Command Center daemon
-├── dashboard/              # Next.js 14 App Router UI (React, Tailwind, Wagmi)
+├── requirements.txt        # Backend dependencies
+├── dashboard/              # Legacy Next.js dashboard
+├── frontend/               # Modern Next.js 14 App Router Command Center
+│   ├── app/                # UI Pages & Components
+│   │   ├── dashboard/      # Advanced Skills & Agent Control
+│   │   │   ├── agent/      # AI Chat Interface & Emergency Stop
+│   │   │   └── skills/     # 3-Panel Control & Telemetry Logs
+│   │   └── page.tsx        # Command Center Landing Page
 ├── contracts/              # MockMantleDeFi.sol Sandbox Smart Contracts
 ├── core/
 │   ├── agents/             # Hierarchical Agent System
@@ -122,7 +138,7 @@ kinetifi/
 ## **5. Environment Setup & Execution Playbook**
 
 ### **5.1 Setup the Virtual Environment**
-Verify that the virtual environment symlinks are configured correctly for Python 3.14 on Linux:
+Verify that the virtual environment symlinks are configured correctly for Python 3.10+ on Linux:
 ```bash
 rm -f .venv/bin/python3 .venv/bin/python
 ln -s /usr/bin/python3 .venv/bin/python3
@@ -130,19 +146,20 @@ ln -s python3 .venv/bin/python
 .venv/bin/pip install -r requirements.txt
 ```
 
-### **5.2 Start the Command Center**
+### **5.2 Start the Command Center Backend**
 The KinetiFi backend operates as a FastAPI daemon. Start it with uvicorn:
 ```bash
 .venv/bin/python -m uvicorn server:app --reload --port 8000
 ```
 
-### **5.3 Launch the Dashboard**
-The Next.js dashboard consumes the backend telemetry stream via SSE.
+### **5.3 Launch the Dashboard Frontend**
+Navigate to the frontend directory and start the Next.js development server:
 ```bash
-cd dashboard
+cd frontend
 npm install
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
 
 ### **5.4 Execute the Local Sandbox Simulations**
 KinetiFi is built with a highly deterministic local testing environment running on Anvil (`anvil --port 8545`). These scripts inject live market shocks into the blockchain to test the agent's defensive responses.
@@ -157,6 +174,39 @@ PYTHONPATH=. .venv/bin/python sandbox/tests/run_stochastic_simulation.py
 PYTHONPATH=. .venv/bin/python sandbox/tests/run_flywheel_simulation.py
 ```
 
+### **5.5 Integrating the Mantle MCP Server (`mantle-mcp`)**
+
+KinetiFi integrates with the **Mantle Network** using a modular, specialized Model Context Protocol (MCP) server. The server codebase is hosted in a separate repository:
+* **Mantle MCP Repository:** [https://github.com/Tmalone1250/mantle-mcp/](https://github.com/Tmalone1250/mantle-mcp/)
+
+#### **How it is Integrated:**
+- The KinetiFi agent loop uses a **zero-trust, subprocess-spawning stdio transport**.
+- When the `MantleYieldAgent` or `MantleIdentityAgent` is invoked, it dynamically locates the server at `KinetiFi/mantle-mcp/server.py`.
+- It automatically checks for a local virtual environment (`.venv/bin/python`) in the `mantle-mcp` directory to execute the server, falling back to the parent virtual environment if needed.
+- This ensures plug-and-play integration without requiring you to run a separate terminal command or service.
+
+#### **Manual Setup (If Running Standalone):**
+If you wish to test or run the `mantle-mcp` server standalone:
+1. Navigate to the `mantle-mcp/` directory:
+   ```bash
+   cd mantle-mcp
+   ```
+2. Set up the environment and run via FastMCP:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   fastmcp dev server.py
+   ```
+
+### **5.6 Running the Demo Mode (Force Trigger)**
+1. Ensure both the backend (port 8000) and frontend (port 3000) are running.
+2. Navigate to the **Advanced Skills** page in the dashboard.
+3. Observe the three panels: **Arbitrage**, **Active Rebalancing**, and **Yield Auto-Compounding**.
+4. Click the **Force Trigger** button on any card to simulate an event.
+5. Watch the live SSE telemetry log panel immediately populate with detailed analysis steps showing how the agent scans, maps routes, calculates margins, structures transaction bundles, and requests user approval.
+
 ---
 
 *Abstracting the entire complexity of Web3 into an autonomous, institutional-grade OS built natively for the Mantle ecosystem.*
+

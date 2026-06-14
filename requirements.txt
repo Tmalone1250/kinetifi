@@ -5,3 +5,7 @@ uvicorn>=0.22.0
 python-dotenv>=1.0.0
 websockets>=11.0.0
 web3[async]>=6.0.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langgraph-checkpoint-sqlite
+langchain-openai
