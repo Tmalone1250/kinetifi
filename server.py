@@ -6,6 +6,7 @@ import uvicorn
 import asyncio
 import json
 import os
+import re
 
 # The Orchestrator Hook
 from core.agents.mantle_agent import MantleChainRouter
@@ -161,10 +162,9 @@ def clean_agent_response(text: str) -> str:
     if not text:
         return text
     
-    import re
     # 1. Strip markdown code blocks containing json or other tags
-    text = re.sub(r"```json\n[\s\S]*?\n```", "", text)
-    text = re.sub(r"```[\s\S]*?```", "", text)
+    text = re.sub(r"```\w*\s*[\s\S]*?```", "", text)
+
     
     # 2. Strip raw JSON blocks (e.g. { ... })
     first_brace = text.find("{")

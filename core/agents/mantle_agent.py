@@ -207,8 +207,9 @@ You must strictly separate Research from Execution. Never do both simultaneously
                     # Strip the markdown json block from the LLM's response to keep UI clean
                     import re
                     content = all_messages[-1].content
-                    clean_content = re.sub(r"```json\n[\s\S]*?\n```", "", content).strip()
+                    clean_content = re.sub(r"```\w*\s*[\s\S]*?```", "", content).strip()
                     response_text = clean_content if clean_content else "Here is the transaction bundle for your review."
+
                     
                     pending_bundle = bundle_obj
                     log_telemetry_event(
