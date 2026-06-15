@@ -174,7 +174,16 @@ PYTHONPATH=. .venv/bin/python sandbox/tests/run_stochastic_simulation.py
 PYTHONPATH=. .venv/bin/python sandbox/tests/run_flywheel_simulation.py
 ```
 
-### **5.5 Integrating the Mantle MCP Server (`mantle-mcp`)**
+### **5.5 Integrating the KinetiFi MCP Server (`kinetifi-mcp`)**
+
+KinetiFi extends its autonomous logic capabilities through a standalone Model Context Protocol (MCP) server. This server exposes custom DeFi strategy execution tools, identity management protocols, and specialized routing logic to AI agents.
+* **KinetiFi MCP Repository:** [https://github.com/tmalone1250/kinetifi-mcp](https://github.com/tmalone1250/kinetifi-mcp)
+
+#### **How it is Integrated:**
+- Operates via a **zero-trust, stdio transport** connection using the official MCP Python SDK.
+- Can be invoked by external AI clients (like Claude Desktop or the Antigravity agent) to interact directly with the KinetiFi smart contract ecosystem.
+
+### **5.6 Integrating the Mantle MCP Server (`mantle-mcp`)**
 
 KinetiFi integrates with the **Mantle Network** using a modular, specialized Model Context Protocol (MCP) server. The server codebase is hosted in a separate repository:
 * **Mantle MCP Repository:** [https://github.com/Tmalone1250/mantle-mcp/](https://github.com/Tmalone1250/mantle-mcp/)
@@ -199,7 +208,7 @@ If you wish to test or run the `mantle-mcp` server standalone:
    fastmcp dev server.py
    ```
 
-### **5.6 Running the Demo Mode (Force Trigger)**
+### **5.7 Running the Demo Mode (Force Trigger)**
 1. Ensure both the backend (port 8000) and frontend (port 3000) are running.
 2. Navigate to the **Advanced Skills** page in the dashboard.
 3. Observe the three panels: **Arbitrage**, **Active Rebalancing**, and **Yield Auto-Compounding**.
