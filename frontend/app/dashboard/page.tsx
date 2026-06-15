@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, PieChart, CheckCircle2, ArrowUpRight, Search, Copy, Check, ExternalLink, Loader2, Zap, AlertTriangle, X } from "lucide-react";
+import { Wallet, PieChart, CheckCircle2, ArrowUpRight, Search, Copy, Check, ExternalLink, Loader2, Zap, AlertTriangle, X, Info } from "lucide-react";
 import { useState, useEffect } from "react";
 import clsx from "clsx";
 import { useAccount, useReadContract, useSwitchChain, useSendTransaction, useWaitForTransactionReceipt } from "wagmi";
@@ -33,6 +33,7 @@ export default function DashboardOverview() {
   // Quick Action & Modals state
   const [showScanModal, setShowScanModal] = useState(false);
   const [showTxModal, setShowTxModal] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<'moe' | 'aave' | null>(null);
   const [scanResults, setScanResults] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
@@ -289,23 +290,15 @@ export default function DashboardOverview() {
           {/* DeFi Positions Card */}
           <Card title="DeFi Positions" icon={<PieChart className="w-5 h-5 text-violet-400" />}>
             <div className="space-y-4">
-              <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                <span className="text-slate-400">Treasury Flywheel Health</span>
-                <span className="flex items-center gap-1 text-emerald-400 font-medium">
-                  {isSyncing ? (
-                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 border border-emerald-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live Sync
-                    </span>
-                  ) : (
-                    <>98% <ArrowUpRight className="w-4 h-4" /></>
-                  )}
-                </span>
-              </div>
-              
+
               <div className="bg-white/5 rounded-lg p-3 border border-white/5">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium text-sm">Merchant Moe LP</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">Merchant Moe LP</span>
+                    <button onClick={() => setSelectedPosition('moe')} className="text-slate-500 hover:text-sky-400 transition-colors">
+                      <Info className="w-4 h-4" />
+                    </button>
+                  </div>
                   <span className="text-xs text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">Active Bins: {activeBinsCount}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm text-slate-400">
@@ -318,7 +311,12 @@ export default function DashboardOverview() {
 
               <div className="bg-white/5 rounded-lg p-3 border border-white/5">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium text-sm">Aave V3 Supplied</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">Aave V3 Supplied</span>
+                    <button onClick={() => setSelectedPosition('aave')} className="text-slate-500 hover:text-violet-400 transition-colors">
+                      <Info className="w-4 h-4" />
+                    </button>
+                  </div>
                   <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Mantle</span>
                 </div>
                 <div className="flex justify-between items-center text-sm text-slate-400">
@@ -705,6 +703,51 @@ export default function DashboardOverview() {
           </div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {selectedPosition && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="flex justify-between items-center p-6 border-b border-white/5 bg-white/5">
+                <h3 className="text-xl font-bold tracking-tight text-white">Position Details</h3>
+                <button
+                  onClick={() => setSelectedPosition(null)}
+                  className="p-1 text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                {selectedPosition === 'moe' && (
+                  <>
+                    <DetailRow label="Protocol" value="Merchant Moe (DEX)" />
+                    <DetailRow label="Pool Pair" value="WMNT-USDT" />
+                    <DetailRow label="Total Balance" value={`${moeBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} LP Tokens`} />
+                    <DetailRow label="Active Bins" value={activeBinsCount.toString()} />
+                    <DetailRow label="Contract" value="0x365722f12ceb2063286A268B03c654Df81B7C00F" isAddress />
+                    <DetailRow label="Network" value="Mantle L2" />
+                  </>
+                )}
+                {selectedPosition === 'aave' && (
+                  <>
+                    <DetailRow label="Protocol" value="Aave V3 (Lending)" />
+                    <DetailRow label="Asset" value="aWMNT" />
+                    <DetailRow label="Total Supplied" value={`${aaveBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} aWMNT`} />
+                    <DetailRow label="USD Value" value={`$${(aaveBalance * prices.mantle).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                    <DetailRow label="Contract" value="0x85d86061e94CE01D3DA0f9EFa289c86ff136125a" isAddress />
+                    <DetailRow label="Network" value="Mantle L2" />
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -726,4 +769,13 @@ function Card({ title, icon, children }: { title: string; icon: React.ReactNode;
     </motion.div>
   );
 }
-
+function DetailRow({ label, value, isAddress }: { label: string; value: string; isAddress?: boolean }) {
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+      <span className="text-sm text-slate-400">{label}</span>
+      <span className={clsx("text-sm font-medium", isAddress ? "font-mono text-sky-400 text-xs" : "text-white")}>
+        {isAddress ? value.slice(0, 8) + "..." + value.slice(-6) : value}
+      </span>
+    </div>
+  );
+}

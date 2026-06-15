@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Terminal, Cpu } from "lucide-react";
+import { Home, Terminal, Cpu, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 
 export default function DashboardLayout({
@@ -11,6 +12,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
     { label: "Overview", href: "/dashboard", icon: Home },
@@ -21,11 +23,24 @@ export default function DashboardLayout({
   return (
     <div className="flex h-screen bg-slate-950 text-slate-50 overflow-hidden font-sans">
       {/* Sidebar */}
-      <aside className="w-64 border-r border-white/5 bg-slate-950/50 flex flex-col shrink-0">
-        <div className="h-20 flex items-center px-6 border-b border-white/5">
+      <aside 
+        className={clsx(
+          "relative border-r border-white/5 bg-slate-950/50 flex flex-col shrink-0 transition-all duration-300",
+          isCollapsed ? "w-20" : "w-64"
+        )}
+      >
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white hover:bg-slate-700 z-10 transition-colors shadow-lg"
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        <div className={clsx("h-20 flex items-center border-b border-white/5", isCollapsed ? "justify-center" : "px-6")}>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-gradient-to-tr from-sky-500 to-violet-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]" />
-            <span className="text-lg font-bold tracking-wide">KinetiFi</span>
+            <div className="w-6 h-6 shrink-0 rounded bg-gradient-to-tr from-sky-500 to-violet-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]" />
+            {!isCollapsed && <span className="text-lg font-bold tracking-wide">KinetiFi</span>}
           </div>
         </div>
         
@@ -38,22 +53,30 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center rounded-lg text-sm font-medium transition-all overflow-hidden",
+                  isCollapsed ? "justify-center py-3 px-0" : "gap-3 px-4 py-3",
                   isActive
                     ? "bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-[inset_0_0_15px_rgba(14,165,233,0.1)]"
                     : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
                 )}
+                title={isCollapsed ? item.label : undefined}
               >
-                <Icon className={clsx("w-5 h-5", isActive ? "text-sky-400" : "text-slate-500")} />
-                {item.label}
+                <Icon className={clsx("w-5 h-5 shrink-0", isActive ? "text-sky-400" : "text-slate-500")} />
+                {!isCollapsed && <span className="whitespace-nowrap">{item.label}</span>}
               </Link>
             );
           })}
         </nav>
         
-        <div className="p-4 border-t border-white/5 text-xs text-slate-600 text-center font-mono">
-          Identity ID: 1<br/>
-          Status: ACTIVE
+        <div className="p-4 border-t border-white/5 text-xs text-slate-600 text-center font-mono overflow-hidden whitespace-nowrap min-h-[64px] flex flex-col justify-center">
+          {!isCollapsed ? (
+            <>
+              Identity ID: 1<br/>
+              Status: ACTIVE
+            </>
+          ) : (
+            <div className="w-2 h-2 mx-auto rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" title="Identity: 1 | Status: ACTIVE" />
+          )}
         </div>
       </aside>
 

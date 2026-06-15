@@ -201,7 +201,11 @@ export default function AgentCommandCenter() {
   }, [fetchTelemetry]);
 
   const handleSend = async (override?: string | any) => {
-    const textToSend = typeof override === "string" ? override : prompt;
+    // If override is passed but it's an event object, fall back to prompt
+    const overrideText = typeof override === 'string' ? override : undefined;
+    const textToSend = overrideText !== undefined ? overrideText : prompt;
+    
+    if (!textToSend || typeof textToSend !== 'string') return;
     const trimmed = textToSend.trim();
     if (!trimmed || isLoading) return;
 

@@ -150,7 +150,12 @@ async def delete_conversation(conv_id: int):
 
 @app.get("/api/conversations/{conv_id}/messages")
 async def get_messages(conv_id: int):
-    return sqlite_manager.get_messages(conv_id)
+    messages = sqlite_manager.get_messages(conv_id)
+    # Clean up past messages in case they were stored before the improved regex
+    for msg in messages:
+        if msg.get("role") == "agent":
+            msg["content"] = clean_agent_response(msg.get("content", ""))
+    return messages
 
 # --- Chat Formatting Helpers ---
 
@@ -162,11 +167,14 @@ def clean_agent_response(text: str) -> str:
     if not text:
         return text
     
-    # 1. Strip markdown code blocks containing json or other tags
-    text = re.sub(r"```\w*\s*[\s\S]*?```", "", text)
-
+    # 1. Strip sentences introducing the JSON block (e.g. "Here is the raw JSON...")
+    text = re.sub(r"(?i)(?:Here is|This is|Below is|The following is) (?:the )?(?:raw )?JSON(?: payload| block)?.*?:?", "", text)
+    text = re.sub(r"(?i)The transaction bundle.*?(?:array|payload|JSON)[\s\S]*?(?:```|$)", "", text)
     
-    # 2. Strip raw JSON blocks (e.g. { ... })
+    # 2. Strip markdown code blocks containing json or other tags (even if unclosed)
+    text = re.sub(r"```\w*\s*[\s\S]*?(?:```|$)", "", text)
+    
+    # 3. Strip raw JSON blocks (e.g. { ... })
     first_brace = text.find("{")
     last_brace = text.rfind("}")
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
