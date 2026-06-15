@@ -65,8 +65,16 @@ class DemoTriggerRequest(BaseModel):
     skill: str
     payload: Optional[Dict[str, Any]] = None
 
+class ProvenanceSummary(BaseModel):
+    total_decisions: int
+    successful_decisions: int
+    failed_decisions: int
+    success_rate: float
 
-
+class RecentHash(BaseModel):
+    tx_hash: str
+    tx_type: str
+    elapsed_seconds: int
 
 @app.get("/health")
 async def health_check():
@@ -125,6 +133,18 @@ async def clear_telemetry():
         )
         raise HTTPException(status_code=500, detail="Failed to clear telemetry")
 
+
+# --- Provenance Endpoints ---
+
+@app.get("/api/provenance/summary", response_model=ProvenanceSummary)
+async def get_provenance_summary_endpoint(agent_id: str = "default"):
+    summary = sqlite_manager.get_provenance_summary(agent_id)
+    return ProvenanceSummary(**summary)
+
+@app.get("/api/provenance/recent", response_model=List[RecentHash])
+async def get_recent_provenance_endpoint(agent_id: str = "default"):
+    recent = sqlite_manager.get_recent_provenance(agent_id)
+    return [RecentHash(**r) for r in recent]
 
 # --- Conversation Persistence Endpoints ---
 

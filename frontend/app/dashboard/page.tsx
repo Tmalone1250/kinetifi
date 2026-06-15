@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { useAccount, useReadContract, useSwitchChain, useSendTransaction, useWaitForTransactionReceipt } from "wagmi";
 import { formatUnits } from "viem";
 import { useDeFiPositions } from "../../hooks/useDeFiPositions";
+import { useAgentProvenance } from "../../hooks/useAgentProvenance";
 
 const ERC20_BALANCE_ABI = [
   {
@@ -29,6 +30,9 @@ export default function DashboardOverview() {
 
   // Real-time DeFi Positions
   const { aaveBalance, moeBalance, activeBinsCount, isSyncing } = useDeFiPositions();
+
+  // Real-time Agent Provenance
+  const { summary, recent } = useAgentProvenance();
 
   // Quick Action & Modals state
   const [showScanModal, setShowScanModal] = useState(false);
@@ -337,29 +341,38 @@ export default function DashboardOverview() {
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                 <div className="text-sm text-slate-400 mb-1">Success Rate</div>
-                <div className="text-2xl font-bold text-emerald-400">99.8%</div>
+                <div className="text-2xl font-bold text-emerald-400">
+                  {summary.isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : `${summary.data?.success_rate?.toFixed(2) ?? "0.00"}%`}
+                </div>
               </div>
               <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                <div className="text-sm text-slate-400 mb-1">Decisions</div>
-                <div className="text-2xl font-bold text-sky-400">1,204</div>
+                <div className="text-sm text-slate-400 mb-1">Evaluations</div>
+                <div className="text-2xl font-bold text-sky-400">
+                  {summary.isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (summary.data?.total_decisions?.toLocaleString() ?? "0")}
+                </div>
               </div>
             </div>
             
             <div className="space-y-3">
-              <div className="text-sm font-medium text-slate-300 mb-2">Recent Hashes (ERC-8004)</div>
-              {[
-                { hash: "0x4f8a...9c21", time: "2 mins ago", type: "Swap" },
-                { hash: "0x1a2b...3c4d", time: "1 hour ago", type: "Provide LP" },
-                { hash: "0x5e6f...7g8h", time: "3 hours ago", type: "Rebalance" },
-              ].map((item, i) => (
-                <div key={i} className="flex justify-between items-center text-sm">
-                  <span className="font-mono text-slate-400">{item.hash}</span>
-                  <div className="flex gap-3">
-                    <span className="text-slate-500">{item.time}</span>
-                    <span className="text-sky-400 w-20 text-right">{item.type}</span>
-                  </div>
+              <div className="text-sm font-medium text-slate-300 mb-2 flex items-center justify-between">
+                <span>Recent Hashes (ERC-8004)</span>
+                {recent.isFetching && !recent.isLoading && <span className="flex w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>}
+              </div>
+              {recent.isLoading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Fetching provenance logs...
                 </div>
-              ))}
+              ) : (
+                recent.data?.map((item: any) => (
+                  <div key={item.tx_hash} className="flex justify-between items-center text-sm">
+                    <span className="font-mono text-slate-400">{item.tx_hash.slice(0, 10)}...</span>
+                    <div className="flex gap-3">
+                      <span className="text-slate-500">{item.elapsed_seconds}s ago</span>
+                      <span className="text-sky-400 w-24 text-right">{item.tx_type}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
 

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Terminal, Cpu, ChevronLeft, ChevronRight } from "lucide-react";
 import clsx from "clsx";
+import { WalletDropdown } from "../../components/WalletDropdown";
 
 export default function DashboardLayout({
   children,
@@ -25,13 +26,13 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside 
         className={clsx(
-          "relative border-r border-white/5 bg-slate-950/50 flex flex-col shrink-0 transition-all duration-300",
+          "relative border-r border-white/5 bg-slate-950/50 flex flex-col shrink-0 transition-all duration-300 z-50",
           isCollapsed ? "w-20" : "w-64"
         )}
       >
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white hover:bg-slate-700 z-10 transition-colors shadow-lg"
+          className="absolute -right-3 top-1/2 -translate-y-1/2 bg-slate-800 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white hover:bg-slate-700 z-10 transition-colors shadow-lg cursor-pointer"
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -81,12 +82,18 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-hidden min-h-0 bg-[#020617] relative">
+      <main className="flex-1 flex flex-col overflow-hidden min-h-0 bg-[#020617] relative z-0">
         {/* Subtle background glow effect */}
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none" />
         
-        {children}
+        <header className="h-16 border-b border-white/5 flex items-center justify-end px-6 relative z-50 shrink-0 bg-slate-950/50 backdrop-blur-sm">
+          <WalletDropdown />
+        </header>
+
+        <div className="flex-1 overflow-y-auto z-10 relative">
+          {children}
+        </div>
       </main>
     </div>
   );
