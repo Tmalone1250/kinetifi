@@ -289,6 +289,11 @@ export default function DashboardOverview() {
   const usdcUsd = usdcFormatted * prices["usd-coin"];
   const totalUsd = mntUsd + methUsd + usdcUsd;
 
+  const filteredScanResults = scanResults.filter(pool => {
+    const isPoolCasper = pool.action_type === "casper";
+    return selectedNetwork === 'casper' ? isPoolCasper : !isPoolCasper;
+  });
+
 
   return (
     <div className="flex-1 overflow-y-auto p-8 relative z-10">
@@ -688,9 +693,9 @@ export default function DashboardOverview() {
                   <Loader2 className="w-8 h-8 text-sky-400 animate-spin" />
                   <p className="text-sm font-mono text-slate-400">Scanning smart contracts...</p>
                 </div>
-              ) : scanResults.length === 0 ? (
+              ) : filteredScanResults.length === 0 ? (
                 <div className="py-20 text-center text-slate-500 font-mono text-sm border border-dashed border-white/10 rounded-xl">
-                  No active pools scanned. Check network RPC.
+                  No active pools scanned for {selectedNetwork === 'casper' ? "Casper Testnet" : "Mantle L2"}. Check network RPC.
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-xl border border-white/5 bg-black/30">
@@ -707,7 +712,7 @@ export default function DashboardOverview() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {scanResults.map((pool, idx) => {
+                      {filteredScanResults.map((pool, idx) => {
                         const isCasper = pool.action_type === "casper";
                         return (
                           <tr key={idx} className="hover:bg-white/5 transition-colors">
