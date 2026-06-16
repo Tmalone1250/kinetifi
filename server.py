@@ -552,6 +552,60 @@ async def scan_yields():
     return {"results": opportunities}
 
 
+@app.get("/api/portfolio/casper/{address}")
+async def get_casper_portfolio(address: str):
+    import requests
+    api_key = os.getenv("CSPR_CLOUD_TESTNET_API_KEY") or os.getenv("CSPR_CLOUD_API_KEY")
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = api_key
+        
+    base_url = "https://api.testnet.cspr.cloud"
+    url = f"{base_url}/accounts/{address}"
+    
+    # Standard demo fallbacks
+    cspr_bal = 4850.0
+    usdc_bal = 150.0
+    casper_price = 0.015
+    
+    # Try fetching Casper network price from CoinGecko
+    try:
+        cg_res = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=casper-network&vs_currencies=usd", timeout=3)
+        if cg_res.status_code == 200:
+            casper_price = cg_res.json().get("casper-network", {}).get("usd", 0.015)
+    except Exception:
+        pass
+        
+    fetched = False
+    error_msg = None
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json().get("data", {})
+            motes_str = data.get("balance", "0")
+            cspr_bal = int(motes_str) / 1_000_000_000
+            fetched = True
+        else:
+            error_msg = f"CSPR.cloud returned status {resp.status_code}: {resp.text}"
+    except Exception as e:
+        error_msg = str(e)
+        
+    cspr_usd = cspr_bal * casper_price
+    usdc_usd = usdc_bal * 1.0
+    
+    return {
+        "address": address,
+        "cspr_balance": cspr_bal,
+        "cspr_usd": cspr_usd,
+        "usdc_balance": usdc_bal,
+        "usdc_usd": usdc_usd,
+        "total_usd": cspr_usd + usdc_usd,
+        "fetched": fetched,
+        "error": error_msg,
+        "price": casper_price
+    }
+
+
 @app.post("/api/transact/prepare")
 async def prepare_tx(req: PrepareRequest):
     import sys, os

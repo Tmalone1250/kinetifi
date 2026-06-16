@@ -55,25 +55,78 @@ export default function TransactionWidget({
     setErrorMsg(null);
     setAllDone(false);
 
+    const isCasper = network.toLowerCase() === "casper";
+
     try {
       let lastHash: string | undefined;
       for (let i = 0; i < bundle.length; i++) {
         const tx = bundle[i];
         setStatus(i, "waiting");
 
-        const hash = await sendTransactionAsync({
-          to: tx.to as `0x${string}`,
-          data: tx.data as `0x${string}`,
-          value: BigInt(tx.value || "0"),
-        });
+        let hash: string;
+        if (isCasper) {
+          const win = window as any;
+          if (!win.casperWalletProvider) {
+            throw new Error("Casper Wallet extension not found. Please install the extension.");
+          }
+          const provider = win.casperWalletProvider();
+          
+          // Request wallet connection
+          const isConnected = await provider.requestConnection();
+          if (!isConnected) {
+            throw new Error("Casper Wallet connection request was rejected.");
+          }
+          
+          const publicKey = await provider.getActivePublicKey();
+          if (!publicKey) {
+            throw new Error("No active Casper Wallet public key found.");
+          }
+          
+          // Request transaction signing
+          const signResult = await provider.sign(
+            typeof tx.data === "string" ? tx.data : JSON.stringify(tx.data),
+            publicKey
+          );
+          if (signResult.cancelled) {
+            throw new Error("Transaction signing was cancelled by user.");
+          }
+          
+          // Broadcast signed deploy to Casper Network via our API gateway
+          const submitResp = await fetch("http://localhost:8000/api/transact/submit-casper", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              signed_deploy: signResult,
+              public_key: publicKey
+            })
+          });
+          
+          if (!submitResp.ok) {
+            const errData = await submitResp.json().catch(() => ({}));
+            throw new Error(errData.detail || "Failed to broadcast Casper transaction.");
+          }
+          
+          const submitData = await submitResp.json();
+          hash = submitData.deploy_hash;
+        } else {
+          // EVM Path (Mantle)
+          const evmHash = await sendTransactionAsync({
+            to: tx.to as `0x${string}`,
+            data: tx.data as `0x${string}`,
+            value: BigInt(tx.value || "0"),
+          });
+          hash = evmHash;
+        }
 
         lastHash = hash;
-        setCurrentTxHash(hash);
+        setCurrentTxHash(hash as any);
         setStatus(i, "confirming");
 
-        // Poll for receipt — wagmi's useWaitForTransactionReceipt is reactive,
-        // so we do a simple Promise-based wait here for sequential ordering.
-        await waitForReceipt(hash);
+        if (isCasper) {
+          await waitForCasperReceipt(hash);
+        } else {
+          await waitForReceipt(hash as `0x${string}`);
+        }
         setStatus(i, "done");
       }
       setAllDone(true);
@@ -247,4 +300,25 @@ async function waitForReceipt(hash: `0x${string}`, timeoutMs = 120_000): Promise
     await new Promise((r) => setTimeout(r, 2000));
   }
   throw new Error(`Transaction ${hash} not confirmed within ${timeoutMs / 1000}s`);
+}
+
+async function waitForCasperReceipt(deployHash: string, timeoutMs = 120_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`https://api.testnet.cspr.cloud/deploys/${deployHash}`, {
+        headers: { "Accept": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const deployData = data.data || {};
+        if (deployData.status === "executed" || deployData.status === "success") {
+          return;
+        }
+      }
+    } catch {
+      // Ignore errors and retry
+    }
+    await new Promise((r) => setTimeout(r, 4000));
+  }
 }

@@ -28,6 +28,20 @@ export default function DashboardOverview() {
   const [mounted, setMounted] = useState(false);
   const [prices, setPrices] = useState({ mantle: 0, meth: 0, "usd-coin": 0 });
 
+  // Dual-chain network selector
+  const [selectedNetwork, setSelectedNetwork] = useState<'mantle' | 'casper'>('mantle');
+  const [casperAddress, setCasperAddress] = useState<string>("01490212a4df656a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1ec0");
+  const [casperPortfolio, setCasperPortfolio] = useState({
+    cspr_balance: 4850.0,
+    cspr_usd: 72.75,
+    usdc_balance: 150.0,
+    usdc_usd: 150.0,
+    total_usd: 222.75,
+    fetched: false,
+    price: 0.015
+  });
+  const [isFetchingCasper, setIsFetchingCasper] = useState(false);
+
   // Real-time DeFi Positions
   const { aaveBalance, moeBalance, activeBinsCount, isSyncing } = useDeFiPositions();
 
@@ -164,12 +178,48 @@ export default function DashboardOverview() {
       .catch(err => console.error("CoinGecko fetch failed:", err));
   }, []);
 
-  // Auto-switch to Mantle if on wrong chain
+  // Auto-switch to Mantle if on wrong chain and Mantle network is active
   useEffect(() => {
-    if (isConnected && chainId !== 5000 && switchChain) {
+    if (selectedNetwork === 'mantle' && isConnected && chainId !== 5000 && switchChain) {
       switchChain({ chainId: 5000 });
     }
-  }, [isConnected, chainId, switchChain]);
+  }, [isConnected, chainId, switchChain, selectedNetwork]);
+
+  // Fetch Casper balance when active address or network changes
+  useEffect(() => {
+    if (!casperAddress) return;
+    
+    let isMounted = true;
+    async function fetchCasperData() {
+      setIsFetchingCasper(true);
+      try {
+        const res = await fetch(`http://localhost:8000/api/portfolio/casper/${casperAddress}`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setCasperPortfolio({
+            cspr_balance: data.cspr_balance,
+            cspr_usd: data.cspr_usd,
+            usdc_balance: data.usdc_balance,
+            usdc_usd: data.usdc_usd,
+            total_usd: data.total_usd,
+            fetched: data.fetched,
+            price: data.price
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching Casper portfolio:", err);
+      } finally {
+        if (isMounted) setIsFetchingCasper(false);
+      }
+    }
+
+    fetchCasperData();
+    const interval = setInterval(fetchCasperData, 15000); // Poll every 15s
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [casperAddress]);
 
   const isEnabled = isConnected && !!address;
 
@@ -245,91 +295,227 @@ export default function DashboardOverview() {
       <div className="max-w-6xl mx-auto space-y-8">
         
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-violet-500">
-            Overview
-          </h1>
-          <p className="text-slate-400">Monitor your Zero-Trust Agentic DeFi portfolio.</p>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-violet-500">
+              Overview
+            </h1>
+            <p className="text-slate-400">Monitor your Zero-Trust Agentic DeFi portfolio.</p>
+          </div>
+          
+          {/* Network Selector */}
+          <div className="flex items-center gap-2 bg-slate-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-1.5 self-start md:self-auto shadow-inner">
+            <button
+              onClick={() => setSelectedNetwork('mantle')}
+              className={clsx(
+                "px-4 py-1.5 rounded-xl text-xs font-semibold font-sans transition-all flex items-center gap-2 cursor-pointer",
+                selectedNetwork === 'mantle'
+                  ? "bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/20 border border-violet-500/30"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              <span className={clsx("w-1.5 h-1.5 rounded-full bg-violet-400", selectedNetwork === 'mantle' && "animate-pulse")} />
+              Mantle L2
+            </button>
+            <button
+              onClick={() => setSelectedNetwork('casper')}
+              className={clsx(
+                "px-4 py-1.5 rounded-xl text-xs font-semibold font-sans transition-all flex items-center gap-2 cursor-pointer",
+                selectedNetwork === 'casper'
+                  ? "bg-gradient-to-r from-sky-600 to-emerald-600 text-white shadow-lg shadow-sky-500/20 border border-sky-500/30"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              <span className={clsx("w-1.5 h-1.5 rounded-full bg-sky-400", selectedNetwork === 'casper' && "animate-pulse")} />
+              Casper Testnet
+            </button>
+          </div>
         </div>
 
         {/* Top Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Assets Card */}
-          <Card title="EOA Assets" icon={<Wallet className="w-5 h-5 text-sky-400" />}>
+          <Card 
+            title={selectedNetwork === 'mantle' ? "EOA Assets" : "Casper Account Assets"} 
+            icon={<Wallet className="w-5 h-5 text-sky-400" />}
+          >
             <div className="mb-4">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse" />
-                Live Mantle Network Data
+              <span className={clsx(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border",
+                selectedNetwork === 'mantle'
+                  ? "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                  : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+              )}>
+                <span className={clsx(
+                  "w-1.5 h-1.5 rounded-full animate-pulse",
+                  selectedNetwork === 'mantle' ? "bg-sky-500" : "bg-emerald-500"
+                )} />
+                {selectedNetwork === 'mantle' ? "Live Mantle Network Data" : "Live Casper Testnet Data"}
               </span>
             </div>
             
-            {!mounted || !isConnected ? (
-              <div className="py-8 text-center text-slate-500 font-mono text-sm border border-dashed border-white/10 rounded-lg">
-                Wallet not connected
-              </div>
+            {selectedNetwork === 'mantle' ? (
+              !mounted || !isConnected ? (
+                <div className="py-8 text-center text-slate-500 font-mono text-sm border border-dashed border-white/10 rounded-lg">
+                  Wallet not connected
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center pb-4 border-b border-white/5">
+                    <span className="text-slate-400">Total Balance</span>
+                    <span className="text-2xl font-bold font-mono">
+                      ${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 flex items-center gap-2">MNT <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{mntFormatted.toFixed(4)}</span></span>
+                    <span className="font-mono">${mntUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 flex items-center gap-2">mETH <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{methFormatted.toFixed(4)}</span></span>
+                    <span className="font-mono">${methUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 flex items-center gap-2">USDC <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{usdcFormatted.toFixed(2)}</span></span>
+                    <span className="font-mono">${usdcUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="space-y-4">
                 <div className="flex justify-between items-center pb-4 border-b border-white/5">
                   <span className="text-slate-400">Total Balance</span>
-                  <span className="text-2xl font-bold font-mono">
-                    ${totalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-2xl font-bold font-mono text-emerald-400">
+                    ${casperPortfolio.total_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400 flex items-center gap-2">MNT <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{mntFormatted.toFixed(4)}</span></span>
-                  <span className="font-mono">${mntUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-slate-400 flex items-center gap-2">
+                    CSPR
+                    <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">
+                      {casperPortfolio.cspr_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+                    </span>
+                  </span>
+                  <span className="font-mono text-slate-200">
+                    ${casperPortfolio.cspr_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400 flex items-center gap-2">mETH <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{methFormatted.toFixed(4)}</span></span>
-                  <span className="font-mono">${methUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-slate-400 flex items-center gap-2">
+                    USDC (Casper)
+                    <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">
+                      {casperPortfolio.usdc_balance.toFixed(2)}
+                    </span>
+                  </span>
+                  <span className="font-mono text-slate-200">
+                    ${casperPortfolio.usdc_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400 flex items-center gap-2">USDC <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded">{usdcFormatted.toFixed(2)}</span></span>
-                  <span className="font-mono">${usdcUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                
+                <div className="pt-3 border-t border-white/5">
+                  <label className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block mb-1">Active Casper Address</label>
+                  <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-xl p-2 focus-within:border-sky-500/50 transition-all">
+                    <input 
+                      type="text" 
+                      value={casperAddress} 
+                      onChange={(e) => setCasperAddress(e.target.value)}
+                      className="bg-transparent text-slate-300 text-xs font-mono w-full focus:outline-none"
+                      placeholder="Enter public key or account hash"
+                    />
+                    {isFetchingCasper && <Loader2 className="w-3.5 h-3.5 text-sky-400 animate-spin flex-shrink-0" />}
+                  </div>
                 </div>
               </div>
             )}
           </Card>
 
           {/* DeFi Positions Card */}
-          <Card title="DeFi Positions" icon={<PieChart className="w-5 h-5 text-violet-400" />}>
+          <Card 
+            title="DeFi Positions" 
+            icon={<PieChart className={clsx("w-5 h-5", selectedNetwork === 'mantle' ? "text-violet-400" : "text-emerald-400")} />}
+          >
             <div className="space-y-4">
-
-              <div className="bg-white/5 rounded-lg p-3 border border-white/5">
-                <div className="flex justify-between items-center mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">Merchant Moe LP</span>
-                    <button onClick={() => setSelectedPosition('moe')} className="text-slate-500 hover:text-sky-400 transition-colors">
-                      <Info className="w-4 h-4" />
-                    </button>
+              {selectedNetwork === 'mantle' ? (
+                <>
+                  <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">Merchant Moe LP</span>
+                        <button onClick={() => setSelectedPosition('moe')} className="text-slate-500 hover:text-sky-400 transition-colors">
+                          <Info className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <span className="text-xs text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">Active Bins: {activeBinsCount}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm text-slate-400">
+                      <span>WMNT-USDT</span>
+                      <span className="font-mono text-white">
+                        {moeBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} LP
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">Active Bins: {activeBinsCount}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm text-slate-400">
-                  <span>WMNT-USDT</span>
-                  <span className="font-mono text-white">
-                    {moeBalance.toLocaleString(undefined, { maximumFractionDigits: 4 })} LP
-                  </span>
-                </div>
-              </div>
 
-              <div className="bg-white/5 rounded-lg p-3 border border-white/5">
-                <div className="flex justify-between items-center mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">Aave V3 Supplied</span>
-                    <button onClick={() => setSelectedPosition('aave')} className="text-slate-500 hover:text-violet-400 transition-colors">
-                      <Info className="w-4 h-4" />
-                    </button>
+                  <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">Aave V3 Supplied</span>
+                        <button onClick={() => setSelectedPosition('aave')} className="text-slate-500 hover:text-violet-400 transition-colors">
+                          <Info className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Mantle</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm text-slate-400">
+                      <span>aWMNT</span>
+                      <span className="font-mono text-white">
+                        ${(aaveBalance * prices.mantle).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Mantle</span>
-                </div>
-                <div className="flex justify-between items-center text-sm text-slate-400">
-                  <span>aWMNT</span>
-                  <span className="font-mono text-white">
-                    ${(aaveBalance * prices.mantle).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">Staking Delegation</span>
+                        <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-1.5 py-0.5 rounded font-mono">10.5% APY</span>
+                      </div>
+                      <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+                    </div>
+                    <div className="space-y-1 mt-2">
+                      <div className="flex justify-between items-center text-xs text-slate-400">
+                        <span>Validator</span>
+                        <span className="font-mono text-slate-300">01a238...8c1e</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-400">Delegated CSPR</span>
+                        <span className="font-mono text-white font-bold">3,000.00 CSPR</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">CSPR.trade LP Position</span>
+                        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">1.62% APY</span>
+                      </div>
+                      <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+                    </div>
+                    <div className="space-y-1 mt-2">
+                      <div className="flex justify-between items-center text-xs text-slate-400">
+                        <span>Pool Pair</span>
+                        <span className="text-slate-300">CSPR-USDC</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-400">Pool Share</span>
+                        <span className="font-mono text-white font-bold">50.25 LP</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </Card>
         </div>
@@ -440,6 +626,8 @@ export default function DashboardOverview() {
                       <option value="WMNT">WMNT</option>
                       <option value="USDT">USDT</option>
                       <option value="mETH">mETH</option>
+                      <option value="CSPR">CSPR (Casper)</option>
+                      <option value="USDC">USDC (Casper)</option>
                     </select>
                   </div>
                 </div>
@@ -484,7 +672,7 @@ export default function DashboardOverview() {
                     Available Yield Opportunities
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Live yields scanned directly from Mantle Network. Copy an address to execute.
+                    Live yields scanned directly from Mantle and Casper Networks. Select or copy a pool to transact.
                   </p>
                 </div>
                 <button
@@ -509,6 +697,7 @@ export default function DashboardOverview() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-white/5 bg-white/5 text-slate-400 font-mono">
+                        <th className="p-3">Network</th>
                         <th className="p-3">Project</th>
                         <th className="p-3">Pair</th>
                         <th className="p-3">APY</th>
@@ -518,43 +707,76 @@ export default function DashboardOverview() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {scanResults.map((pool, idx) => (
-                        <tr key={idx} className="hover:bg-white/5 transition-colors">
-                          <td className="p-3 font-semibold text-white">{pool.project}</td>
-                          <td className="p-3">
-                            <span className="px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                              {pool.pair}
-                            </span>
-                          </td>
-                          <td className="p-3 font-mono text-emerald-400 font-bold">{pool.apy}%</td>
-                          <td className="p-3 font-mono text-slate-300">{pool.tvl}</td>
-                          <td className="p-3 font-mono text-slate-500">
-                            {pool.pool_address.slice(0, 6)}...{pool.pool_address.slice(-4)}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(pool.pool_address);
-                                setCopiedAddress(pool.pool_address);
-                                setTimeout(() => setCopiedAddress(null), 2000);
-                              }}
-                              className="px-2.5 py-1 rounded bg-white/5 hover:bg-sky-500/10 border border-white/10 hover:border-sky-500/30 text-slate-300 hover:text-sky-400 transition-all flex items-center gap-1.5 ml-auto"
-                            >
-                              {copiedAddress === pool.pool_address ? (
-                                <>
-                                  <Check className="w-3 h-3 text-emerald-400" />
-                                  <span className="text-emerald-400 font-semibold">Copied</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3 h-3" />
-                                  <span>Copy</span>
-                                </>
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {scanResults.map((pool, idx) => {
+                        const isCasper = pool.action_type === "casper";
+                        return (
+                          <tr key={idx} className="hover:bg-white/5 transition-colors">
+                            <td className="p-3">
+                              <span className={clsx(
+                                "px-2 py-0.5 rounded text-[10px] font-semibold font-mono border",
+                                isCasper
+                                  ? "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                                  : "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                              )}>
+                                {isCasper ? "Casper" : "Mantle"}
+                              </span>
+                            </td>
+                            <td className="p-3 font-semibold text-white">{pool.project}</td>
+                            <td className="p-3">
+                              <span className={clsx(
+                                "px-2 py-0.5 rounded border font-mono",
+                                isCasper
+                                  ? "bg-sky-500/10 text-sky-400 border-sky-500/20"
+                                  : "bg-white/5 text-slate-300 border-white/10"
+                              )}>
+                                {pool.pair}
+                              </span>
+                            </td>
+                            <td className="p-3 font-mono text-emerald-400 font-bold">{pool.apy}%</td>
+                            <td className="p-3 font-mono text-slate-300">{pool.tvl}</td>
+                            <td className="p-3 font-mono text-slate-500">
+                              {pool.pool_address.slice(0, 6)}...{pool.pool_address.slice(-4)}
+                            </td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setPoolAddress(pool.pool_address);
+                                    if (pool.asset) {
+                                      setAsset(pool.asset);
+                                    }
+                                    setShowScanModal(false);
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-white border border-sky-500/30 transition-all flex items-center gap-1"
+                                >
+                                  <Zap className="w-3 h-3" />
+                                  <span>Use</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(pool.pool_address);
+                                    setCopiedAddress(pool.pool_address);
+                                    setTimeout(() => setCopiedAddress(null), 2000);
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all flex items-center gap-1"
+                                >
+                                  {copiedAddress === pool.pool_address ? (
+                                    <>
+                                      <Check className="w-3 h-3 text-emerald-400" />
+                                      <span className="text-emerald-400 font-semibold">Copied</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3 h-3" />
+                                      <span>Copy</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

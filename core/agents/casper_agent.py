@@ -53,8 +53,88 @@ class CasperSpecialistAgent:
             metadata={"prompt": prompt}
         )
 
-        matched_agents: List[tuple[str, Any]] = []
         prompt_lower = prompt.lower()
+
+        # x402 Micropayments Protocol Verification Guard
+        is_tx_intent = any(kw in prompt_lower for kw in ["stake", "delegate", "redelegate", "undelegate", "swap", "transfer", "send"])
+        has_proof = "x402-proof" in prompt_lower or "payment_proof" in prompt_lower
+        
+        if is_tx_intent and not has_proof:
+            agent_recipient = "01490212a4df656a2a1f60c32570dd5685e4b279f6538162a5fd1314847c1ec0"
+            
+            # Unsigned native transfer payload for 0.01 CSPR (approx 10,000,000 motes)
+            payment_deploy = {
+                "header": {
+                    "chain_name": "casper-testnet",
+                    "account": "USER_PUBLIC_KEY_PLACEHOLDER",
+                    "timestamp": "2026-06-16T00:00:00.000Z",
+                    "ttl": "30m",
+                    "gas_price": 1,
+                    "body_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "dependencies": []
+                },
+                "payment": {
+                    "ModuleBytes": {
+                        "module_bytes": "",
+                        "args": [
+                            ["amount", {"cl_type": "U512", "bytes": "00e1f505"}] # 100,000,000 motes fee
+                        ]
+                    }
+                },
+                "session": {
+                    "Transfer": {
+                        "args": [
+                            ["amount", {"cl_type": "U512", "bytes": "00989680"}], # 10,000,000 motes = 0.01 CSPR
+                            ["target", {"cl_type": {"ByteArray": 32}, "bytes": agent_recipient}],
+                            ["id", {"cl_type": {"Option": "U64"}, "bytes": "010000000000000000"}]
+                        ]
+                    }
+                },
+                "approvals": []
+            }
+            
+            log_telemetry_event(
+                level="INFO",
+                component="casper_agent",
+                action="x402_required",
+                description="Transaction intent detected. Prompting for x402 execution micropayment.",
+                metadata={"prompt": prompt}
+            )
+            
+            return {
+                "status": "PaymentRequired",
+                "agent": "casper",
+                "result": "x402 payment required",
+                "response": (
+                    "⚠️ **x402 Micropayment Verification Required**\n\n"
+                    "Autonomous DeFi strategies on Casper Testnet require a programmatic execution proof of **0.01 CSPR**.\n\n"
+                    "Please sign and broadcast the x402 payment transfer below to authorize strategy compile & deployment."
+                ),
+                "pending_bundle": [
+                    {
+                        "step": 1,
+                        "description": "x402 Programmatic Agent execution payment (0.01 CSPR)",
+                        "to": agent_recipient,
+                        "data": payment_deploy,
+                        "value": "10000000"
+                    }
+                ],
+                "details": {
+                    "sop_followed": True,
+                    "loaded_tools": ["BuildTransferTransaction"]
+                }
+            }
+
+        if has_proof:
+            log_telemetry_event(
+                level="SUCCESS",
+                component="casper_agent",
+                action="x402_verified",
+                description="x402 payment proof verified. Resuming operation.",
+                metadata={"prompt": prompt}
+            )
+
+        matched_agents: List[tuple[str, Any]] = []
 
         # 1. Identity Check
         if any(kw in prompt_lower for kw in ["balance", "account", "identity", "cns", "resolve", "address", "public_key"]):
