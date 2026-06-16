@@ -475,6 +475,9 @@ def _build_conversational_response(intent: str, wallet: Optional[str], result: D
 @app.get("/api/yields/scan")
 async def scan_yields():
     import sys, os
+    import importlib.util
+    
+    # 1. Load mantle-mcp moe yields
     mcp_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "mantle-mcp"))
     if mcp_path not in sys.path:
         sys.path.append(mcp_path)
@@ -500,6 +503,51 @@ async def scan_yields():
                 "tvl": "$1.2M",
                 "action_type": "merchant_moe"
             })
+            
+    # 2. Load kinetifi-mcp Casper yields using isolated dynamic loader
+    mcp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "kinetifi-mcp"))
+    file_path = os.path.join(mcp_dir, "tools", "scan_yields.py")
+    
+    if os.path.exists(file_path):
+        try:
+            spec = importlib.util.spec_from_file_location("kinetifi_scan_yields", file_path)
+            scan_yields_module = importlib.util.module_from_spec(spec)
+            
+            # Prepend path and mock server module during exec to avoid package name collisions
+            class MockMCP:
+                def tool(self, *args, **kwargs):
+                    return lambda f: f
+            
+            mock_server = type("MockServerModule", (), {"mcp": MockMCP()})
+            old_server = sys.modules.get("server")
+            sys.modules["server"] = mock_server
+            
+            old_path = sys.path.copy()
+            sys.path.insert(0, mcp_dir)
+            try:
+                spec.loader.exec_module(scan_yields_module)
+            finally:
+                sys.path = old_path
+                if old_server:
+                    sys.modules["server"] = old_server
+                else:
+                    del sys.modules["server"]
+                
+            fetch_casper_yields = scan_yields_module.fetch_casper_yields
+            
+            casper_yield_list = await fetch_casper_yields()
+            for cy in casper_yield_list:
+                opportunities.append({
+                    "project": cy.dex_name,
+                    "pair": cy.trading_pair if cy.trading_pair != "Token0/Token1" else "CSPR/USDC",
+                    "pool_address": cy.pool_hash,
+                    "asset": "CSPR",
+                    "apy": cy.apy,
+                    "tvl": "$100K",
+                    "action_type": "casper"
+                })
+        except Exception as e:
+            print(f"Error fetching Casper yields in scan_yields: {e}")
             
     return {"results": opportunities}
 

@@ -123,10 +123,12 @@ class CasperSpecialistAgent:
         combined_tools = list(dict.fromkeys(combined_tools))
 
         # Compile final consolidated response
+        result_text = f"Successfully completed Casper operations via sub-agents: {', '.join([n for n, _ in matched_agents])}."
         final_result = {
             "status": "TaskCompleted",
             "agent": "casper",
-            "result": f"Successfully completed Casper operations via sub-agents: {', '.join([n for n, _ in matched_agents])}.",
+            "result": result_text,
+            "response": result_text,
             "data": final_data,
             "details": {
                 "sub_agent_results": sub_results,

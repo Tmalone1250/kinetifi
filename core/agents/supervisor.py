@@ -154,7 +154,7 @@ async def generate_bundle(state: SupervisorState):
         prompt = f"Execute this intent on Casper: {intent.intent}"
         router = CasperSpecialistAgent()
         result = await router.connect_and_execute(prompt=prompt)
-        return {"messages": [{"role": "ai", "content": result.get("response", "Done.")}]}
+        return {"messages": [{"role": "ai", "content": result.get("response") or result.get("result") or "Done."}]}
         
     return {"messages": [{"role": "ai", "content": f"Routed to {target}."}]}
 
